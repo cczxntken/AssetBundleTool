@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 namespace LitEngine.LoadAsset
 {
     public class ByteFileInfo
@@ -36,6 +37,34 @@ namespace LitEngine.LoadAsset
                 }
                 LoadByLines(tlines.ToArray());
             }
+        }
+
+        public void Save(string pFullPath)
+        {
+            try
+            {
+                string tfilePath = pFullPath;
+                if (File.Exists(tfilePath))
+                {
+                    File.Delete(tfilePath);
+                }
+                var tlist = new List<ByteFileInfo>(fileMap.Values);
+                StringBuilder tstrbd = new StringBuilder();
+
+                for (int i = 0,tcount = tlist.Count; i < tcount; i++)
+                {
+                    var item = tlist[i];
+                    string tline = UnityEngine.JsonUtility.ToJson(item);
+                    tstrbd.AppendLine(tline);
+                }
+                File.AppendAllText(tfilePath, tstrbd.ToString());
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError("生成文件信息出现错误, error:" + ex.Message);
+            }
+
+            Debug.Log("生成文件信息完成.");
         }
 
         private void LoadByLines(string[] pLines)

@@ -30,14 +30,37 @@ namespace LitEngine.LoadAsset.DownLoad
                 return sInstance;
             }
         }
-
+        public const int MaxThread = 3;
 
         private Hashtable sDownLoadMap = Hashtable.Synchronized(new Hashtable());
+        private ArrayList sDownLoading = ArrayList.Synchronized(new ArrayList());
+        private ArrayList sWaitDownLoad = ArrayList.Synchronized(new ArrayList());
+
+        private Hashtable sGroupMap = Hashtable.Synchronized(new Hashtable());
         private bool mInited = false;
 
         private DownLoadManager()
         {
             
+        }
+
+        private void OnDestroy()
+        {
+            ArrayList tkeys = new ArrayList(sDownLoadMap.Keys);
+            for (int i = 0 ,length = tkeys.Count; i < length; i++)
+            {
+                object tk = tkeys[i];
+                DownLoader item = (DownLoader)sDownLoadMap[tk];
+                item.Dispose();
+            }
+
+            ArrayList tgkeys = new ArrayList(sGroupMap.Keys);
+            for (int i = 0 ,length = tgkeys.Count; i < length; i++)
+            {
+                object tk = tgkeys[i];
+                DownLoadGroup item = (DownLoadGroup)sGroupMap[tk];
+                item.Dispose();
+            }
         }
 
         public void Init()
@@ -46,51 +69,143 @@ namespace LitEngine.LoadAsset.DownLoad
             mInited = true;
         }
 
-        public static bool DownLoadFileAsync(string sourceurl, string destination,long pLength, System.Action<DownLoader> finished, System.Action<DownLoader> progress = null,bool isClear = true)
+        public static DownLoader DownLoadFileAsync(string sourceurl, string destination,string pFileName,string pMD5,long pLength, System.Action<DownLoader> finished, System.Action<DownLoader> progress = null, bool isClear = true)
         {
+            DownLoader ret = null;
             if (Instance.sDownLoadMap.ContainsKey(sourceurl))
             {
-                Debug.LogError("有相同URL文件正在下载当中.URL = " + sourceurl);
-                return false;
+                Debug.LogWarning("为正在下载的文件添加回调.url = " + sourceurl);
+                ret = (DownLoader)Instance.sDownLoadMap[sourceurl];
             }
-            DownLoader ttaskdown = new DownLoader(sourceurl, destination, pLength, isClear);
-            if (finished != null)
-                ttaskdown.OnComplete += finished;
-            if (progress != null)
-                ttaskdown.OnProgress += progress;
-
-            ttaskdown.StartAsync();
-            Add(sourceurl,ttaskdown);
-            return true;
-        }
-
-        public static void Add(string pKey, IDownLoad pDownLoader)
-        {
-            if (!Instance.sDownLoadMap.ContainsKey(pKey))
+            else
             {
-                Instance.sDownLoadMap.Add(pKey, pDownLoader);
+                ret = new DownLoader(sourceurl, destination,pFileName, pMD5, pLength, isClear);
+            }
+            DownLoadFileAsync(ret, finished, progress, isClear);
+            return ret;
+        }
+
+        public static void DownLoadFileAsync(DownLoader pLoader,System.Action<DownLoader> finished, System.Action<DownLoader> progress = null, bool isClear = true)
+        {
+            if(pLoader == null) return;
+            if (finished != null)
+                pLoader.OnComplete += finished;
+            if (progress != null)
+                pLoader.OnProgress += progress;
+
+            Add(pLoader);
+        }
+
+        public static void AddGroup(DownLoadGroup pGroup)
+        {
+            if (!Instance.sGroupMap.ContainsKey(pGroup.Key))
+            {
+                Instance.sGroupMap.Add(pGroup.Key, pGroup);
             }
         }
 
-        public static void Remove(string pKey)
+        public static void RemoveGroup(object pKey)
+        {
+            if(Instance.sGroupMap.ContainsKey(pKey))
+            {
+                Instance.sGroupMap.Remove(pKey);
+            }
+        }
+
+        public static void Add(DownLoader pDownLoader)
+        {
+            if (!Instance.sDownLoadMap.ContainsKey(pDownLoader.Key))
+            {
+                Instance.sDownLoadMap.Add(pDownLoader.Key, pDownLoader);
+                Instance.sWaitDownLoad.Add(pDownLoader);
+            }
+        }
+        
+
+        public static void Remove(object pKey)
         {
             if(Instance.sDownLoadMap.ContainsKey(pKey))
             {
+                var item = Instance.sDownLoadMap[pKey];
                 Instance.sDownLoadMap.Remove(pKey);
+
+
+                var tlist = Instance.sDownLoading;
+                int tindex = tlist.IndexOf(item);
+                
+                if(tindex == -1)
+                {
+                    tlist = Instance.sWaitDownLoad;
+                    tindex = tlist.IndexOf(item);
+                }
+
+                if (tindex != -1)
+                {
+                    tlist.RemoveAt(tindex);
+                }
             }
         }
 
+
         private void Update()
         {
-            ArrayList tkeys = new ArrayList(sDownLoadMap.Keys);
-            for (int i = tkeys.Count - 1; i >= 0; i--)
+            UpdateLoader();
+            UpdateGroup();
+        }
+
+        void UpdateLoader()
+        {
+            if (sDownLoading.Count == 0 && sWaitDownLoad.Count == 0) return;
+            UpdateDownLoading();
+            UpdateWaitQue();
+        }
+
+        void UpdateDownLoading()
+        {
+            for (int i = sDownLoading.Count - 1; i >= 0; i--)
             {
-                object key = tkeys[i];
-                IDownLoad item = (IDownLoad)sDownLoadMap[key];
+                IDownLoad item = (IDownLoad)sDownLoading[i];
                 item.Update();
-                if(item.IsDone)
+                if (item.IsDone)
                 {
-                    sDownLoadMap.Remove(key);
+                    Remove(item.Key);
+                }
+            }
+        }
+
+        void UpdateWaitQue()
+        {
+            if (sWaitDownLoad.Count > 0 && sDownLoading.Count < MaxThread)
+            {
+                int tneed = MaxThread - sDownLoading.Count;
+                for (int i = 0; i < tneed; i++)
+                {
+                    IDownLoad item = (IDownLoad)sWaitDownLoad[0];
+                    sWaitDownLoad.RemoveAt(0);
+                    sDownLoading.Add(item);
+                    item.StartAsync();
+
+                    if (sWaitDownLoad.Count == 0)
+                    {
+                        break;
+                    }
+                }
+
+            }
+        }
+
+        void UpdateGroup()
+        {
+            if(sGroupMap.Count == 0) return;
+            ArrayList tkeys = new ArrayList(sGroupMap.Keys);
+            for (int i = 0,length = tkeys.Count; i < length; i++)
+            {
+                var tkey = tkeys[i];
+                DownLoadGroup item = (DownLoadGroup)sGroupMap[tkey];
+                item.Update();
+                if (item.IsDone)
+                {
+                    RemoveGroup(tkey);
                 }
             }
         }

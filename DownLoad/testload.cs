@@ -15,8 +15,8 @@ public class testload : MonoBehaviour
        testload.onComplete += DownloadCompleteG;
        testload.OnProgress += DownloadProcessG;
 
-       testload.AddByUrl(tqq,Application.dataPath+"/../",10,true);
-       testload.AddByUrl(wx,Application.dataPath+"/../",10,true);
+       testload.AddByUrl(tqq,Application.dataPath+"/../","testdownload/qq.exe","3434fdf99df9sfaa",10,true);
+       testload.AddByUrl(wx,Application.dataPath+"/../","testdownload/wx.apk","ddddffff44",10,true);
 
        testload.StartAsync();
     }

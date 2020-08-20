@@ -17,12 +17,14 @@ namespace LitEngine.LoadAsset.DownLoad
         public event System.Action<DownLoader> OnProgress = null;
         #endregion
         #region 属性
-        public string DestinationPath { get; private set; }
-        public string SourceURL { get; private set; }
-        public string TempFile { get; private set; }
-        public string CompleteFile { get; private set; }
-        public string FileName { get; private set; }
-        public string Error { get; private set; }
+        public string Key { get; private set; }
+        public string DestinationPath { get; private set; }//目标路径
+        public string SourceURL { get; private set; }//url
+        public string TempFile { get; private set; }//下载临时文件名字F ullPath
+        public string TempPath{ get; private set; }//下载临时文件名路径
+        public string CompleteFile { get; private set; }//下载结束文件 FullPath
+        public string FileName { get; private set; }//文件名
+        public string Error { get; private set; }//error message
         public float Progress
         {
             get
@@ -32,14 +34,16 @@ namespace LitEngine.LoadAsset.DownLoad
         }
         
         public DownloadState State { get; private set; }
-        public bool IsDone { get;private set;}
+        public bool IsDone { get;private set;}//下载线程完成
+        public bool IsCompleteDownLoad { get { return IsDone && Error == null; } } //成功下载
 
-        public long ContentLength { get; private set; }
-        public long DownLoadedLength { get; private set; }
-        public long InitContentLength { get; private set; }
+        public string MD5String { get; private set; }
+        public long ContentLength { get; private set; }//需要下载的长度
+        public long DownLoadedLength { get; private set; }//已下载长度
+        public long InitContentLength { get; private set; }//预下载长度
 
 
-        private bool mIsClear = false;
+        private bool mIsClear = false;//是否清除断点续传
 
         private bool mThreadRuning = false;
 
@@ -50,22 +54,29 @@ namespace LitEngine.LoadAsset.DownLoad
 
         #endregion
         #region 构造析构
-        public DownLoader(string pSourceurl, string pDestination,long pLength, bool pClear)
+        public DownLoader(string pSourceurl, string pDestination,string pFileName,string pMD5,long pLength, bool pClear)
         {
+            Key = pSourceurl;
             SourceURL = pSourceurl;
             DestinationPath = pDestination;
+            FileName = pFileName;
+            MD5String = pMD5;
             mIsClear = pClear;
             InitContentLength = pLength;
 
-            Error = null;
 
             string[] turlstrs = SourceURL.Split('/');
-            FileName = turlstrs[turlstrs.Length - 1];
-
-            TempFile = DestinationPath + "/" + FileName + ".temp";
+            string tfileName = turlstrs[turlstrs.Length - 1];
+            if (string.IsNullOrEmpty(FileName))
+            {
+                FileName = tfileName;
+            }
+            TempPath = string.Format("{0}/tempDownLoad", DestinationPath);
+            TempFile = string.Format("{0}/{1}.temp", TempPath, string.IsNullOrEmpty(MD5String) ? tfileName : MD5String);
             CompleteFile = DestinationPath + "/" + FileName;
 
             State = DownloadState.normal;
+            Error = null;
         }
 
         ~DownLoader()
@@ -86,16 +97,21 @@ namespace LitEngine.LoadAsset.DownLoad
                 return;
             mDisposed = true;
 
+            IsDone = true;
             mThreadRuning = false;
             CloseHttpClient();
+            OnComplete = null;
+            OnProgress = null;
+            OnStart = null;
         }
         #endregion
 
         public void RestState()
         {
-            if (State != DownloadState.finished || Error == null) return;
+            if (State != DownloadState.finished || IsCompleteDownLoad) return;
             State = DownloadState.normal;
             IsDone = false;
+            Error = null;
         }
 
         public void StartAsync()
@@ -103,6 +119,8 @@ namespace LitEngine.LoadAsset.DownLoad
             if (State != DownloadState.normal) return;
             State = DownloadState.downloading;
             mThreadRuning = true;
+            IsDone = false;
+            Error = null;
             OnStart?.Invoke(this);
             Task.Run((System.Action)ReadNetByte);
         }
@@ -112,10 +130,16 @@ namespace LitEngine.LoadAsset.DownLoad
             FileStream ttempfile = null;
             try
             {
+
+                if (!Directory.Exists(TempPath))
+                {
+                    Directory.CreateDirectory(TempPath);
+                }
                 if(!Directory.Exists(DestinationPath))
                 {
                     Directory.CreateDirectory(DestinationPath);
                 }
+
                 long thaveindex = 0;
                 if (File.Exists(TempFile))
                 {
@@ -194,24 +218,41 @@ namespace LitEngine.LoadAsset.DownLoad
             if (ttempfile != null)
                 ttempfile.Close();
 
-            if (DownLoadedLength == ContentLength)
+            try
             {
-                if (File.Exists(TempFile))
+                if (DownLoadedLength == ContentLength)
                 {
-                    if (File.Exists(CompleteFile))
+                    if (File.Exists(TempFile))
                     {
-                        File.Delete(CompleteFile);
+                        if (File.Exists(CompleteFile))
+                        {
+                            File.Delete(CompleteFile);
+                        }
+
+                        int tindex = CompleteFile.LastIndexOf('/');
+                        string tcompletePagth = CompleteFile.Substring(0, tindex);
+
+                        if (!Directory.Exists(tcompletePagth))
+                        {
+                            Directory.CreateDirectory(tcompletePagth);
+                        }
+                        File.Move(TempFile, CompleteFile);
                     }
-                    File.Move(TempFile, CompleteFile);
+                }
+                else
+                {
+                    if (Error == null)
+                        Error = "文件未能完成下载.Stream 被中断.";
                 }
             }
-            else
+            catch (System.Exception erro)
             {
-                if (Error == null)
-                    Error = "文件未能完成下载.Stream 被中断.";
+                Error = erro.ToString();
             }
 
+
             CloseHttpClient();
+            mThreadRuning = false;
             State = DownloadState.finished;
             
         }
@@ -224,7 +265,6 @@ namespace LitEngine.LoadAsset.DownLoad
             if (mHttpStream != null)
             {
                 mHttpStream.Close();
-                mHttpStream.Dispose();
                 mHttpStream = null;
             }
 

@@ -20,11 +20,11 @@ namespace LitEngine.LoadAsset.DownLoad
         public float Progress { get; private set; }
 
         public bool IsDone { get; private set; }
+        public bool IsCompleteDownLoad { get { return IsDone && Error == null; } } //成功下载
         public DownloadState State { get; private set; }
         public string Key { get; private set; }
         public string Error { get; private set; }
-        private List<DownLoader> _groupList = new List<DownLoader>();
-        public List<DownLoader> groupList { get { return _groupList; } }
+        private List<DownLoader> groupList = new List<DownLoader>();
 
         public DownLoadGroup(string newKey)
         {
@@ -62,12 +62,14 @@ namespace LitEngine.LoadAsset.DownLoad
             }
             groupList.Clear();
 
+            IsDone = true;
+
             onComplete = null;
             OnProgress = null;
         }
         #endregion
 
-        public void AddByUrl(string pSourceurl, string pDestination, long pLength, bool pClear)
+        public void AddByUrl(string pSourceurl, string pDestination, string pFileName,string pMD5, long pLength, bool pClear)
         {
             if (State != DownloadState.normal)
             {
@@ -75,7 +77,7 @@ namespace LitEngine.LoadAsset.DownLoad
                 return;
             }
             if (IsHaveURL(pSourceurl)) return;
-            Add(new DownLoader(pSourceurl, pDestination, pLength, pClear));
+            Add(new DownLoader(pSourceurl, pDestination,pFileName, pMD5, pLength, pClear));
         }
 
         private void Add(DownLoader newObject)
@@ -85,7 +87,7 @@ namespace LitEngine.LoadAsset.DownLoad
 
         private bool IsHaveURL(string pSourceurl)
         {
-            int tindex = groupList.FindIndex((a) => a.SourceURL.Contains(pSourceurl));
+            int tindex = groupList.FindIndex((a) => a.Key.Equals(pSourceurl));
             if (tindex != -1)
             {
                 Debug.LogError("重复添加下载,url = " + pSourceurl);
@@ -102,23 +104,29 @@ namespace LitEngine.LoadAsset.DownLoad
             ContentLength = 0;
             for (int i = 0; i < groupList.Count; i++)
             {
-                groupList[i].StartAsync();
+                if (!groupList[i].IsCompleteDownLoad)
+                {
+                    DownLoadManager.DownLoadFileAsync(groupList[i],null,null);
+                }
                 ContentLength += groupList[i].InitContentLength;
             }
-            DownLoadManager.Add(Key,this);
+            Error = null;
+            IsDone = false;
+            DownLoadManager.AddGroup(this);
         }
 
         public void ReTryAsync()
         {
-            if (State != DownloadState.finished || Error == null) return;
+            if (State != DownloadState.finished || IsCompleteDownLoad) return;
             State = DownloadState.normal;
             IsDone = false;
             for (int i = groupList.Count - 1; i >= 0; i--)
             {
-                if (groupList[i].IsDone && groupList[i].Error == null)
-                    groupList.RemoveAt(i);
-                else
+                if (!groupList[i].IsCompleteDownLoad)
+                {
                     groupList[i].RestState();
+                }
+                    
             }
             if (groupList.Count > 0)
                 StartAsync();
@@ -136,10 +144,13 @@ namespace LitEngine.LoadAsset.DownLoad
                 var item = groupList[i];
                 DownLoadedLength += item.DownLoadedLength;
                 Progress += item.Progress;
-                item.Update();
-                if (!item.IsDone)
+                if (!groupList[i].IsCompleteDownLoad)
                 {
-                    isAllDone = false;
+                    item.Update();
+                    if (!item.IsDone)
+                    {
+                        isAllDone = false;
+                    }
                 }
             }
             Progress = Progress / groupList.Count;
@@ -184,7 +195,8 @@ namespace LitEngine.LoadAsset.DownLoad
             {
                 case DownloadState.downloading:
                     {
-                        if (UpdateChild())
+                        bool tisAllDone = UpdateChild();
+                        if (tisAllDone)
                         {
                             State = DownloadState.finished;
                         }

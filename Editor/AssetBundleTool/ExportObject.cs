@@ -337,7 +337,7 @@ namespace LitEngineEditor
             Debug.Log("清除结束.");
         }
 
-        static bool IsResFile(string pName)
+        public static bool IsResFile(string pName)
         {
             pName = pName.ToLowerInvariant();
             if (pName.EndsWith(".cs")
@@ -396,17 +396,17 @@ namespace LitEngineEditor
                     File.Delete(tfilePath);
                 }
                 StringBuilder tstrbd = new StringBuilder();
-                int i = 0;
-                int tcount = pList.Count;
-                foreach (var item in pList)
+
+                for (int i = 0,tcount = pList.Count; i < tcount; i++)
                 {
+                    var item = pList[i];
                     item.fileMD5 = GetMD5File(item.fileFullPath);
                     string tline = UnityEngine.JsonUtility.ToJson(item);
                     tstrbd.AppendLine(tline);
 
-                    i++;
                     EditorUtility.DisplayProgressBar("建立数据表 ", "Creat " + item.resName, (float)i / tcount);
                 }
+
                 EditorUtility.ClearProgressBar();
                 File.AppendAllText(tfilePath, tstrbd.ToString());
             }
