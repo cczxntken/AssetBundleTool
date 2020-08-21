@@ -35,7 +35,7 @@ namespace LitEngine.LoadAsset
         private static AssetObject sNullObject;
         private Dictionary<string,AssetObject> assetMap;
         
-        bool inited = false;
+       [System.NonSerialized] bool inited = false;
         public void Init()
         {
             if(inited) return;
