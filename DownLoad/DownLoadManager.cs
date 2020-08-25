@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-namespace LitEngine.LoadAsset.DownLoad
+namespace LitEngine.DownLoad
 {
     public class DownLoadManager : MonoBehaviour
     {

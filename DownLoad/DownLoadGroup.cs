@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Threading.Tasks;
-namespace LitEngine.LoadAsset.DownLoad
+namespace LitEngine.DownLoad
 {
     public enum DownloadState
     {
@@ -69,15 +69,17 @@ namespace LitEngine.LoadAsset.DownLoad
         }
         #endregion
 
-        public void AddByUrl(string pSourceurl, string pDestination, string pFileName,string pMD5, long pLength, bool pClear)
+        public DownLoader AddByUrl(string pSourceurl, string pDestination, string pFileName,string pMD5, long pLength, bool pClear)
         {
             if (State != DownloadState.normal)
             {
                 Debug.LogError("已经开始的任务不可插入新内容.");
-                return;
+                return null;
             }
-            if (IsHaveURL(pSourceurl)) return;
-            Add(new DownLoader(pSourceurl, pDestination,pFileName, pMD5, pLength, pClear));
+            if (IsHaveURL(pSourceurl)) return null;
+            DownLoader ret = new DownLoader(pSourceurl, pDestination,pFileName, pMD5, pLength, pClear);
+            Add(ret);
+            return ret;
         }
 
         private void Add(DownLoader newObject)

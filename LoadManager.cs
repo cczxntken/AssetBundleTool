@@ -13,7 +13,7 @@ namespace LitEngine.LoadAsset
 
         private static object lockobj = new object();
         private static LoadManager sInstance = null;
-        private static LoadManager Instance
+        public static LoadManager Instance
         {
             get
             {
@@ -71,15 +71,12 @@ namespace LitEngine.LoadAsset
                 tbundle.Unload(false);
             }
 
-            ByteInfoData = new ByteFileInfoList(null);
-            AssetBundle tinfobd = AssetBundle.LoadFromFile(GetFullPath(byteFileInfoFileName));
-            if (tinfobd != null)
+            ByteInfoData = new ByteFileInfoList();
+            string tfilePath = GetFullPath(byteFileInfoFileName);
+            if(File.Exists(tfilePath))
             {
-                TextAsset tass = tinfobd.LoadAsset<TextAsset>(byteFileInfoFileName);
-                if (tass != null)
-                {
-                    ByteInfoData.Load(tass.bytes);
-                }
+                byte[] tdata = File.ReadAllBytes(tfilePath);
+                ByteInfoData.Load(tdata);
             }
         }
 

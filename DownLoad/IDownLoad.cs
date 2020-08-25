@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 
-namespace LitEngine.LoadAsset.DownLoad
+namespace LitEngine.DownLoad
 {
     public interface IDownLoad : System.IDisposable
     {

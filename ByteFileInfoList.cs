@@ -13,29 +13,81 @@ namespace LitEngine.LoadAsset
     }
     public class ByteFileInfoList
     {
-
+        private List<ByteFileInfo> _fileInfoList = new List<ByteFileInfo>();
+        public List<ByteFileInfo> fileInfoList { get { return _fileInfoList; } }
         public Dictionary<string, ByteFileInfo> fileMap { get { return _fileMap; } }
         Dictionary<string, ByteFileInfo> _fileMap = new Dictionary<string, ByteFileInfo>();
 
+        public ByteFileInfoList()
+        {
+        }
+        
         public ByteFileInfoList(byte[] pData)
         {
            Load(pData);
+        }
+
+        public ByteFileInfoList(string pFullPath)
+        {
+            if (File.Exists(pFullPath))
+            {
+                byte[] tdata = File.ReadAllBytes(pFullPath);
+                Load(tdata);
+            }
+        }
+
+        public void AddRange(List<ByteFileInfo> pList)
+        {
+            if(pList == null) return;
+            foreach (var item in pList)
+            {
+                Add(item);  
+            }
+        }
+
+        public bool Add(ByteFileInfo pInfo)
+        {
+            if (!fileMap.ContainsKey(pInfo.resName))
+            {
+                fileMap.Add(pInfo.resName, pInfo);
+                fileInfoList.Add(pInfo);
+            }
+
+            return false;
+        }
+
+        public ByteFileInfo Get(string pKey)
+        {
+            if(fileMap.ContainsKey(pKey))
+            {
+                return fileMap[pKey];
+            }
+            return null;
         }
 
         public void Load(byte[] pData)
         {
             if (pData != null)
             {
-                fileMap.Clear();
-                List<string> tlines = new List<string>();
-                StreamReader treader = new StreamReader(new MemoryStream(pData));
-                string item = treader.ReadLine();
-                while (item != null)
+                string item = null;
+                try
                 {
-                    tlines.Add(item);
+                    fileMap.Clear();
+                    fileInfoList.Clear();
+                    List<string> tlines = new List<string>();
+                    StreamReader treader = new StreamReader(new MemoryStream(pData));
                     item = treader.ReadLine();
+                    while (item != null)
+                    {
+                        tlines.Add(item);
+                        item = treader.ReadLine();
+                    }
+                    LoadByLines(tlines.ToArray());
                 }
-                LoadByLines(tlines.ToArray());
+                catch (System.Exception erro)
+                {
+                    Debug.LogErrorFormat("初始化数据列出错.item = {0},erro = {1}", item, erro.Message);
+                }
             }
         }
 
@@ -48,12 +100,11 @@ namespace LitEngine.LoadAsset
                 {
                     File.Delete(tfilePath);
                 }
-                var tlist = new List<ByteFileInfo>(fileMap.Values);
                 StringBuilder tstrbd = new StringBuilder();
 
-                for (int i = 0,tcount = tlist.Count; i < tcount; i++)
+                for (int i = 0,tcount = fileInfoList.Count; i < tcount; i++)
                 {
-                    var item = tlist[i];
+                    var item = fileInfoList[i];
                     string tline = UnityEngine.JsonUtility.ToJson(item);
                     tstrbd.AppendLine(tline);
                 }
@@ -70,34 +121,37 @@ namespace LitEngine.LoadAsset
         private void LoadByLines(string[] pLines)
         {
             if (pLines == null || pLines.Length == 0) return;
-            for (int i = 0, len = pLines.Length; i < len; i++)
+
+            int i = 0, len = pLines.Length;
+            try
             {
-                try
+                for (; i < len; i++)
                 {
                     ByteFileInfo tinfo = UnityEngine.JsonUtility.FromJson<ByteFileInfo>(pLines[i]);
-                    fileMap.Add(tinfo.resName, tinfo);
+                    Add(tinfo);
                 }
-                catch (System.Exception erro)
-                {
-                    Debug.LogErrorFormat("初始化json数据出现错误.line = {0},str = {1},erro = {2}", i, pLines[i], erro.Message);
-                }
+            }
+            catch (System.Exception erro)
+            {
+                Debug.LogErrorFormat("初始化json数据出现错误.line = {0}, str = {1}, erro = {2}", i, pLines[i], erro.Message);
             }
         }
     
-        public List<ByteFileInfo> Comparison(Dictionary<string, ByteFileInfo> pSor)
+        public List<ByteFileInfo> Comparison(ByteFileInfoList pSor)
         {
+            if(pSor == null) return new List<ByteFileInfo>();
             List<ByteFileInfo> ret = new List<ByteFileInfo>();
-            foreach (var item in pSor)
+            foreach (var item in pSor.fileInfoList)
             {
                 bool isNeedUpdate = false;
-                if(!fileMap.ContainsKey(item.Key))
+                if(!fileMap.ContainsKey(item.resName))
                 {
                     isNeedUpdate = true;
                 }
                 else
                 {
-                    var ttar = fileMap[item.Key];
-                    if(ttar.fileSize != item.Value.fileSize || !ttar.fileMD5.Equals(item.Value.fileMD5))
+                    var ttar = fileMap[item.resName];
+                    if(ttar.fileSize != item.fileSize || !ttar.fileMD5.Equals(item.fileMD5))
                     {
                         isNeedUpdate = true;
                     }
@@ -106,7 +160,7 @@ namespace LitEngine.LoadAsset
 
                 if(isNeedUpdate)
                 {
-                    ret.Add(item.Value);
+                    ret.Add(item);
                 }
             }
             return ret;
