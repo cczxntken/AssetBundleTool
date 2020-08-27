@@ -247,7 +247,7 @@ namespace LitEngineEditor
                 File.Delete(tdespathname);
             File.Copy(_path + tmanifestname, tdespathname);
 
-            //BuildByteFileInfoFile(_path,_path,_target);
+            BuildByteFileInfoFile(_path,_path,_target);
             AssetDatabase.Refresh();
             Debug.Log("导出完成!");
         }
@@ -283,7 +283,6 @@ namespace LitEngineEditor
             DirectoryInfo tdirfolder = new DirectoryInfo(_socPath);
 
             FileInfo[] tfileinfos = tdirfolder.GetFiles("*" + sSuffixName, System.IO.SearchOption.AllDirectories);
-            List<ByteFileInfo> byteFileInfoList = new List<ByteFileInfo>();
             for(int i = 0,tmax = tfileinfos.Length;i < tmax;i++)
             {
                 FileInfo tfile = tfileinfos[i];
@@ -298,12 +297,8 @@ namespace LitEngineEditor
 
                 File.Copy(tfile.FullName, _desPath + "/" + tresPath,true);
 
-                ByteFileInfo tbyteinfo = CreatByteFileInfo(tfile, tresPath);
-                byteFileInfoList.Add(tbyteinfo);
-
                 EditorUtility.DisplayProgressBar("Copy文件", "Copy " + tresPath,(float)i / tmax);
             }
-            CreatTxtInfo(byteFileInfoList, _desPath);
             Debug.Log("移动完成.");
             EditorUtility.ClearProgressBar();
         }

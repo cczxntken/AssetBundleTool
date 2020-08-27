@@ -9,7 +9,7 @@ namespace LitEngine.LoadAsset
         public const string exportPath = "Assets/ExportResources/";
         public const string sSuffixName = ".bytes";
         public const string ManifestName = "AppManifest";
-        public const string byteFileInfoFileName = "bytefileInfo.txt";
+        public const string byteFileInfoFileName = "bytefileinfo.txt";
 
         private static object lockobj = new object();
         private static LoadManager sInstance = null;
@@ -64,19 +64,32 @@ namespace LitEngine.LoadAsset
 
         public void LoadResInfo()
         {
+            LoadMainfest();
+            LoadByteFileInfoList();
+        }
+
+        public void LoadMainfest()
+        {
             AssetBundle tbundle = AssetBundle.LoadFromFile(GetFullPath(ManifestName));
             if (tbundle != null)
             {
                 Manifest = tbundle.LoadAsset<AssetBundleManifest>("AssetBundleManifest");
                 tbundle.Unload(false);
             }
+        }
 
+        public void LoadByteFileInfoList()
+        {
             ByteInfoData = new ByteFileInfoList();
-            string tfilePath = GetFullPath(byteFileInfoFileName);
-            if(File.Exists(tfilePath))
+            AssetBundle tinfobundle = AssetBundle.LoadFromFile(GetFullPath(byteFileInfoFileName));
+            if (tinfobundle != null)
             {
-                byte[] tdata = File.ReadAllBytes(tfilePath);
-                ByteInfoData.Load(tdata);
+                TextAsset tass = tinfobundle.LoadAsset<TextAsset>(byteFileInfoFileName);
+                if (tass != null)
+                {
+                    ByteInfoData.Load(tass.bytes);
+                }
+                tinfobundle.Unload(false);
             }
         }
 

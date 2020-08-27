@@ -56,13 +56,61 @@ namespace LitEngine.LoadAsset
             return false;
         }
 
-        public ByteFileInfo Get(string pKey)
+        public void RemoveRangeWithOutList(Dictionary<string,string> pTable)
         {
-            if(fileMap.ContainsKey(pKey))
+            if(pTable == null) return;
+            for (int i = fileInfoList.Count - 1; i >= 0; i--)
             {
-                return fileMap[pKey];
+                var item = fileInfoList[i];
+                string tkey = item.resName;
+                if(!pTable.ContainsKey(item.resName))
+                {
+                    Remove(item.resName);
+                }
             }
-            return null;
+        }
+
+        public void RemoveRange(List<string> pKeys)
+        {
+            if(pKeys == null) return;
+            foreach (var item in pKeys)
+            {
+                Remove(item);
+            }
+        }
+
+        public void Remove(string pKey)
+        {
+            if (fileMap.ContainsKey(pKey))
+            {
+                var item = fileMap[pKey];
+                fileMap.Remove(pKey);
+                fileInfoList.Remove(item);
+            }
+        }
+
+        public ByteFileInfo this[string pKey]
+        {
+            get
+            {
+                if(fileMap.ContainsKey(pKey))
+                {
+                    return fileMap[pKey];
+                }
+                return null;
+            }
+        }
+
+        public ByteFileInfo this[int pIndex]
+        {
+            get
+            {
+                if(pIndex >=0 && pIndex < fileInfoList.Count)
+                {
+                    return fileInfoList[pIndex];
+                }
+                return null;
+            }
         }
 
         public void Load(byte[] pData)

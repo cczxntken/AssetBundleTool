@@ -42,7 +42,7 @@ namespace LitEngine.UpdateTool
         {
 
         }
-        public void Init()
+        private void Init()
         {
             if (mInited) return;
             mInited = true;
@@ -55,48 +55,83 @@ namespace LitEngine.UpdateTool
             }
         }
 
-        #region update
-        static bool isUpdateing = false;
-        ByteFileInfoList updateInfoObject;
-        DownLoadGroup downLoadGroup;
-        static public void UpdateRes(ByteFileInfoList pInfo, System.Action<DownLoadGroup> onComplete)
+        private void OnDestroy()
         {
-            if (isChecking)
-            {
-                Debug.LogError("更新中,请勿重复调用.");
-                CallUpdateOnComplete(onComplete, null);
-                return;
-            }
-            isUpdateing = true;
-            Instance.StartCoroutine(Instance.FileUpdateing(pInfo,onComplete));
-        }
-        static void CallUpdateOnComplete(System.Action<DownLoadGroup> onComplete, DownLoadGroup dloader)
-        {
-            try
-            {
-                onComplete?.Invoke(dloader);
-            }
-            catch (System.Exception erro)
-            {
-                Debug.LogError("CheckUpdate->" + erro.ToString());
-            }
-        }
 
-        IEnumerator FileUpdateing(ByteFileInfoList pInfo, System.Action<DownLoadGroup> onComplete)
+        }
+        private void OnDisable()
         {
-            updateInfoObject = pInfo;
-            if(downLoadGroup != null)
+            ReTryCount = 0;
+            ReTryCheckCount = 0;
+            isUpdateing = false;
+            isChecking = false;
+            if (downLoadGroup != null)
             {
                 downLoadGroup.Dispose();
             }
+        }
+
+        #region prop
+        static public DownLoadGroup updateGroup
+        {
+            get
+            {
+                return Instance.downLoadGroup;
+            }
+        }
+        static public bool IsRuningUpdate
+        {
+            get
+            {
+                if (isUpdateing || isChecking) return true;
+                return false;
+            }
+        }
+        static bool isUpdateing = false;
+        static bool isChecking = false;
+
+        static int ReTryMaxCount = 5;
+        static int ReTryCount = 0;
+        static int ReTryCheckCount = 0;
+        DownLoadGroup downLoadGroup;
+        #endregion
+
+        #region update
+        static public void UpdateRes(ByteFileInfoList pInfo, System.Action<ByteFileInfoList, string> onComplete, bool autoRetry = false)
+        {
+            if (isUpdateing)
+            {
+                Debug.LogError("更新中,请勿重复调用.");
+                return;
+            }
+            isUpdateing = true;
+            Instance.StartCoroutine(Instance.WaitStarUpdate(0.1f, pInfo, onComplete, autoRetry));
+        }
+
+        IEnumerator WaitStarUpdate(float delayTime, ByteFileInfoList pInfo, System.Action<ByteFileInfoList, string> onComplete, bool autoRetry)
+        {
+            yield return new WaitForSeconds(delayTime);
+            Instance.StartCoroutine(Instance.FileUpdateing(pInfo, onComplete, autoRetry));
+        }
+
+        IEnumerator FileUpdateing(ByteFileInfoList pInfo, System.Action<ByteFileInfoList, string> onComplete, bool autoRetry)
+        {
+            if (downLoadGroup != null)
+            {
+                downLoadGroup.Dispose();
+            }
+            string tdicpath = string.Format("{0}/{1}/", updateData.server, updateData.version);
             downLoadGroup = new DownLoadGroup("updateGroup");
             foreach (var item in pInfo.fileInfoList)
             {
-                string turl = item.resName;
+                string turl = tdicpath + item.resName;
                 var tloader = downLoadGroup.AddByUrl(turl, LoadManager.sidePath, item.resName, item.fileMD5, item.fileSize, false);
                 tloader.OnComplete += (a) =>
                 {
-                    OnUpdateOneComplete(pInfo.Get(a.FileName));
+                    if (string.IsNullOrEmpty(a.Error))
+                    {
+                        OnUpdateOneComplete(pInfo[a.FileName]);
+                    }
                 };
             }
             downLoadGroup.StartAsync();
@@ -106,10 +141,67 @@ namespace LitEngine.UpdateTool
                 yield return null;
             }
 
-            CallUpdateOnComplete(onComplete, downLoadGroup);
-            isUpdateing = false;
+            if (string.IsNullOrEmpty(downLoadGroup.Error))
+            {
+                UpdateFileFinished(onComplete);
+            }
+            else
+            {
+                UpdateFileFail(pInfo, onComplete, autoRetry);
+            }
+
         }
 
+        void UpdateFileFinished(System.Action<ByteFileInfoList, string> onComplete)
+        {
+            isUpdateing = false;
+            UpdateLocalList();
+            CallUpdateOnComplete(onComplete, null, null);
+        }
+
+        void UpdateFileFail(ByteFileInfoList pInfo, System.Action<ByteFileInfoList, string> onComplete, bool autoRetry)
+        {
+            isUpdateing = false;
+            ByteFileInfoList erroListInfo = GetErroListInfo(downLoadGroup, pInfo);
+            if (ReTryCount >= ReTryMaxCount)
+            {
+                autoRetry = false;
+            }
+            if (!autoRetry)
+            {
+                CallUpdateOnComplete(onComplete, erroListInfo, downLoadGroup.Error);
+            }
+            else
+            {
+                Debug.Log(downLoadGroup.Error);
+                ReTryCount++;
+                UpdateRes(erroListInfo, onComplete, autoRetry);
+            }
+        }
+
+        void CallUpdateOnComplete(System.Action<ByteFileInfoList, string> onComplete, ByteFileInfoList pInfo, string pError)
+        {
+            try
+            {
+                if (downLoadGroup != null)
+                {
+                    downLoadGroup.Dispose();
+                }
+                ReTryCount = 0;
+                onComplete?.Invoke(pInfo, pError);
+            }
+            catch (System.Exception erro)
+            {
+                Debug.LogError("CheckUpdate->" + erro.ToString());
+            }
+        }
+
+        ByteFileInfoList GetErroListInfo(DownLoadGroup pGroup, ByteFileInfoList pInfo)
+        {
+            var tlist = pGroup.GetNotCompletFileNameTable();
+            pInfo.RemoveRangeWithOutList(tlist);
+            return pInfo;
+        }
         void OnUpdateOneComplete(ByteFileInfo pInfo)
         {
             if (pInfo == null) return;
@@ -129,45 +221,90 @@ namespace LitEngine.UpdateTool
         #endregion
 
         #region check
-        static bool isChecking = false;
-        static public void CheckUpdate(System.Action<ByteFileInfoList> onComplete)
+
+        static public void CheckUpdate(System.Action<ByteFileInfoList> onComplete, bool needRetry = false)
         {
-            if (isChecking)
+            if (isChecking || isUpdateing)
             {
-                Debug.LogError("检测中,请勿重复调用.");
-                CallCheckOnComplete(onComplete, null);
+                Debug.LogError("更新流程进行中,请勿重复调用.");
                 return;
             }
             isChecking = true;
-            Instance.StartCoroutine(sInstance.CheckingUpdate(onComplete));
+            Instance.StartCoroutine(sInstance.WaitStartCheck(0.1f, onComplete, needRetry));
         }
 
-        IEnumerator CheckingUpdate(System.Action<ByteFileInfoList> onComplete)
+        IEnumerator WaitStartCheck(float delayTime, System.Action<ByteFileInfoList> onComplete, bool needRetry)
+        {
+            yield return new WaitForSeconds(delayTime);
+            Instance.StartCoroutine(sInstance.CheckingUpdate(onComplete, needRetry));
+        }
+
+        IEnumerator CheckingUpdate(System.Action<ByteFileInfoList> onComplete, bool needRetry)
         {
             string tdicpath = string.Format("{0}/{1}/", updateData.server, updateData.version);
             string tuf = tdicpath + LoadManager.byteFileInfoFileName;
-
-            DownLoader tdl = DownLoadManager.DownLoadFileAsync(tuf, LoadManager.sidePath, checkfile, null, 0, null);
-            while (!tdl.IsDone)
+            string tcheckfile = GetCheckFileName();
+            string tfilePath = Path.Combine(LoadManager.sidePath, tcheckfile);
+            if (!File.Exists(tfilePath))
             {
-                yield return null;
+                DownLoader tdl = DownLoadManager.DownLoadFileAsync(tuf, LoadManager.sidePath, tcheckfile, null, 0, null);
+                while (!tdl.IsDone)
+                {
+                    yield return null;
+                }
+                DownLoadCheckFileEnd(tdl, onComplete, needRetry);
+            }
+            else
+            {
+                DownLoadCheckFileFinished(onComplete);
             }
 
-            ByteFileInfoList ret = null;
-            if (tdl.Error == null)
-            {
-                ret = GeNeedDownloadFiles(GetUpdateList());
-            }
+        }
 
-            CallCheckOnComplete(onComplete, ret);
-
+        void DownLoadCheckFileFinished(System.Action<ByteFileInfoList> onComplete)
+        {
             isChecking = false;
+            ByteFileInfoList ret = GetNeedDownloadFiles(GetUpdateList());
+            CallCheckOnComplete(onComplete, ret);
+        }
+
+        void DownLoadCheckFileFail(System.Action<ByteFileInfoList> onComplete, bool needRetry)
+        {
+            isChecking = false;
+            if (ReTryCheckCount >= ReTryMaxCount)
+            {
+                needRetry = false;
+            }
+
+            if (needRetry)
+            {
+                ReTryCheckCount++;
+                CheckUpdate(onComplete, needRetry);
+            }
+            else
+            {
+                CallCheckOnComplete(onComplete, null);
+            }
+        }
+
+        void DownLoadCheckFileEnd(DownLoader dloader, System.Action<ByteFileInfoList> onComplete, bool needRetry)
+        {
+            if (dloader.Error == null)
+            {
+                DownLoadCheckFileFinished(onComplete);
+            }
+            else
+            {
+                Debug.Log(dloader.Error);
+                DownLoadCheckFileFail(onComplete, needRetry);
+            }
         }
 
         static void CallCheckOnComplete(System.Action<ByteFileInfoList> onComplete, ByteFileInfoList pObj)
         {
             try
             {
+                ReTryCheckCount = 0;
                 onComplete?.Invoke(pObj);
             }
             catch (System.Exception erro)
@@ -176,7 +313,7 @@ namespace LitEngine.UpdateTool
             }
         }
 
-        ByteFileInfoList GeNeedDownloadFiles(List<ByteFileInfo> pList)
+        ByteFileInfoList GetNeedDownloadFiles(List<ByteFileInfo> pList)
         {
             if (pList == null || pList.Count == 0) return null;
 
@@ -206,27 +343,45 @@ namespace LitEngine.UpdateTool
         {
             List<ByteFileInfo> ret = null;
             var tinfo = new ByteFileInfoList();
-            string tfilePath = Path.Combine(LoadManager.sidePath, checkfile);
+            string tfilePath = Path.Combine(LoadManager.sidePath, GetCheckFileName());
+
             if (File.Exists(tfilePath))
             {
-                byte[] tdata = File.ReadAllBytes(tfilePath);
-                tinfo.Load(tdata);
+                AssetBundle tinfobundle = AssetBundle.LoadFromFile(tfilePath);
+                if (tinfobundle != null)
+                {
+                    TextAsset tass = tinfobundle.LoadAsset<TextAsset>(LoadManager.byteFileInfoFileName);
+                    if (tass != null)
+                    {
+                        tinfo.Load(tass.bytes);
+                    }
+                    tinfobundle.Unload(false);
+                }
             }
 
             ret = LoadManager.Instance.ByteInfoData.Comparison(tinfo);
             return ret;
         }
 
+        string GetCheckFileName()
+        {
+            return string.Format("{0}_{1}", updateData.version, checkfile);
+        }
+
         void UpdateLocalList()
         {
-            string tfilePath = Path.Combine(LoadManager.sidePath, checkfile);
+            string tfilePath = Path.Combine(LoadManager.sidePath, GetCheckFileName());
+            string tsavefile = Path.Combine(LoadManager.sidePath, LoadManager.byteFileInfoFileName + LoadManager.sSuffixName);
+
             if (File.Exists(tfilePath))
             {
-                byte[] tdata = File.ReadAllBytes(tfilePath);
-                LoadManager.Instance.ByteInfoData.Load(tdata);
+                if (File.Exists(tsavefile))
+                {
+                    File.Delete(tsavefile);
+                }
+                File.Copy(tfilePath, tsavefile);
 
-                string tsavefile = Path.Combine(LoadManager.sidePath, LoadManager.byteFileInfoFileName);
-                LoadManager.Instance.ByteInfoData.Save(tsavefile);
+                LoadManager.Instance.LoadResInfo();
             }
 
             string tdedfile = Path.Combine(LoadManager.sidePath, downloadedfile);

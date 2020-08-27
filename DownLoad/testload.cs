@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using LitEngine.DownLoad;
 using LitEngine.UpdateTool;
+using LitEngine.LoadAsset;
 public class testload : MonoBehaviour
 {
     // Start is called before the first frame update
@@ -23,13 +24,22 @@ public class testload : MonoBehaviour
         {
             if(b != null && b.fileMap.Count > 0)
             {
-
+                UpdateManager.UpdateRes(b,UpdateComplete,true);
             }
             else
             {
                 
             }
         });
+    }
+
+    void UpdateComplete(ByteFileInfoList pInfo,string pError)
+    {
+        Debug.Log(pError);
+        if(pError == null)
+        {
+
+        }
     }
 
     void DownloadComplete(DownLoader pSender)

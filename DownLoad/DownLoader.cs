@@ -172,24 +172,18 @@ namespace LitEngine.DownLoad
                 }
 
                 string rspError = null;
-                int tindex = 0;
-                while (tindex++ < 4 && mThreadRuning)
+                try
                 {
-                    try
-                    {
-                        mResponse = mReqest.GetResponse();
-                        break;
-                    }
-                    catch (System.Exception _error)
-                    {
-                        Debug.LogFormat("ReadNetByte 获取Response失败,尝试次数{0},error = {1}", tindex, _error);
-                        rspError = _error.Message;
-                    }
+                    mResponse = mReqest.GetResponse();
+                }
+                catch (System.Exception _error)
+                {
+                    rspError = _error.Message;
                 }
 
-                if (mResponse == null)
+                if (mResponse == null || rspError != null)
                 {
-                    string terro = string.Format("ReadNetByte 获取Response失败. url = {0} ,error = {1}", SourceURL, rspError);
+                    string terro = string.Format("ReadNetByte 获取Response失败.[Error] = {0}", rspError);
                     throw new System.NullReferenceException(terro);
                 }
 
@@ -223,7 +217,7 @@ namespace LitEngine.DownLoad
             }
             catch (System.Exception _error)
             {
-                Error = _error.Message;
+                Error = string.Format("[URL] = {0},[Error] = {1}", SourceURL, _error.Message);
             }
 
             if (ttempfile != null)
@@ -256,14 +250,14 @@ namespace LitEngine.DownLoad
                 {
                     if (Error == null)
                     {
-                        Error = "文件未能完成下载.Stream 被中断.";
+                        Error = string.Format("[URL] = {0},[Error] = 文件未能完成下载.Stream 被中断.", SourceURL);
                     }
                         
                 }
             }
             catch (System.Exception erro)
             {
-                Error = erro.Message;
+                Error = string.Format("[URL] = {0},[Error] = {1}", SourceURL, erro.Message);
             }
 
             FinishedThread();  
