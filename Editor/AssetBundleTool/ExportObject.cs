@@ -356,7 +356,7 @@ namespace LitEngineEditor
             FileInfo[] tfileinfos = tdirfolder.GetFiles("*" + sSuffixName, System.IO.SearchOption.AllDirectories);
 
             List<ByteFileInfo> byteFileInfoList = new List<ByteFileInfo>();
-
+            string appmainfest = "AppManifest" + sSuffixName;
             for (int i = 0, tmax = tfileinfos.Length; i < tmax; i++)
             {
                 FileInfo tfile = tfileinfos[i];
@@ -366,6 +366,10 @@ namespace LitEngineEditor
 
                 ByteFileInfo tbyteinfo = CreatByteFileInfo(tfile, tresPath);
                 byteFileInfoList.Add(tbyteinfo);
+                if(tfile.FullName.EndsWith(appmainfest))
+                {
+                    tbyteinfo.priority = 999;
+                }
 
                 EditorUtility.DisplayProgressBar("计算Build文件信息", tresPath, (float)i / tmax);
             }

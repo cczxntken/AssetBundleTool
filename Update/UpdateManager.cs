@@ -5,12 +5,14 @@ using LitEngine.LoadAsset;
 using LitEngine.DownLoad;
 using System.IO;
 using System.Collections.Generic;
+using System.Text;
 namespace LitEngine.UpdateTool
 {
     public class UpdateManager : MonoBehaviour
     {
         public const string checkfile = "checkInfoData.txt";
         public const string downloadedfile = "downloadedData.txt";
+        public const string upateMgrData = "jsonData/updateData";
         private static object lockobj = new object();
         private static UpdateManager sInstance = null;
         private static UpdateManager Instance
@@ -48,10 +50,23 @@ namespace LitEngine.UpdateTool
             mInited = true;
 
             updateData = new UpdateData();
-            TextAsset datatxt = Resources.Load<TextAsset>("jsonData/updateData");
+            TextAsset datatxt = Resources.Load<TextAsset>(upateMgrData);
             if (datatxt != null)
             {
                 UnityEngine.JsonUtility.FromJsonOverwrite(datatxt.text, updateData);
+            }
+            else
+            {
+                StringBuilder tstrbd = new StringBuilder();
+                tstrbd.AppendLine(string.Format("加载版本文件失败.请检查Resources目录下是否有 {0}.txt 文件", upateMgrData));
+                tstrbd.AppendLine("格式如下:");
+                tstrbd.AppendLine("{");
+                tstrbd.AppendLine("\"version\":\"1\",");
+                tstrbd.AppendLine("\"server\":\"http://localhost/Resources/\"");
+                tstrbd.AppendLine("}");
+
+                Debug.LogError(tstrbd.ToString());
+
             }
         }
 
@@ -61,14 +76,18 @@ namespace LitEngine.UpdateTool
         }
         private void OnDisable()
         {
+            Stop();
+        }
+
+        private void Stop()
+        {
+            StopAllCoroutines();
             ReTryCount = 0;
             ReTryCheckCount = 0;
             isUpdateing = false;
             isChecking = false;
-            if (downLoadGroup != null)
-            {
-                downLoadGroup.Dispose();
-            }
+            ReleaseGroupLoader();
+            ReleaseCheckLoader();
         }
 
         #region prop
@@ -94,10 +113,22 @@ namespace LitEngine.UpdateTool
         static int ReTryCount = 0;
         static int ReTryCheckCount = 0;
         DownLoadGroup downLoadGroup;
+        DownLoader checkLoader;
         #endregion
 
         #region update
-        static public void UpdateRes(ByteFileInfoList pInfo, System.Action<ByteFileInfoList, string> onComplete, bool autoRetry = false)
+        public delegate void UpdateComplete(ByteFileInfoList info, string error);
+        static public void StopAll()
+        {
+            Instance.Stop();
+        }
+        void ReleaseGroupLoader()
+        {
+            if (downLoadGroup == null) return;
+            downLoadGroup.Dispose();
+            downLoadGroup = null;
+        }
+        static public void UpdateRes(ByteFileInfoList pInfo, UpdateComplete onComplete, bool autoRetry)
         {
             if (isUpdateing)
             {
@@ -108,24 +139,22 @@ namespace LitEngine.UpdateTool
             Instance.StartCoroutine(Instance.WaitStarUpdate(0.1f, pInfo, onComplete, autoRetry));
         }
 
-        IEnumerator WaitStarUpdate(float delayTime, ByteFileInfoList pInfo, System.Action<ByteFileInfoList, string> onComplete, bool autoRetry)
+        IEnumerator WaitStarUpdate(float delayTime, ByteFileInfoList pInfo, UpdateComplete onComplete, bool autoRetry)
         {
             yield return new WaitForSeconds(delayTime);
             Instance.StartCoroutine(Instance.FileUpdateing(pInfo, onComplete, autoRetry));
         }
 
-        IEnumerator FileUpdateing(ByteFileInfoList pInfo, System.Action<ByteFileInfoList, string> onComplete, bool autoRetry)
+        IEnumerator FileUpdateing(ByteFileInfoList pInfo, UpdateComplete onComplete, bool autoRetry)
         {
-            if (downLoadGroup != null)
-            {
-                downLoadGroup.Dispose();
-            }
             string tdicpath = string.Format("{0}/{1}/", updateData.server, updateData.version);
+            ReleaseGroupLoader();
             downLoadGroup = new DownLoadGroup("updateGroup");
             foreach (var item in pInfo.fileInfoList)
             {
                 string turl = tdicpath + item.resName;
                 var tloader = downLoadGroup.AddByUrl(turl, LoadManager.sidePath, item.resName, item.fileMD5, item.fileSize, false);
+                tloader.priority = item.priority;
                 tloader.OnComplete += (a) =>
                 {
                     if (string.IsNullOrEmpty(a.Error))
@@ -152,14 +181,14 @@ namespace LitEngine.UpdateTool
 
         }
 
-        void UpdateFileFinished(System.Action<ByteFileInfoList, string> onComplete)
+        void UpdateFileFinished(UpdateComplete onComplete)
         {
             isUpdateing = false;
             UpdateLocalList();
             CallUpdateOnComplete(onComplete, null, null);
         }
 
-        void UpdateFileFail(ByteFileInfoList pInfo, System.Action<ByteFileInfoList, string> onComplete, bool autoRetry)
+        void UpdateFileFail(ByteFileInfoList pInfo, UpdateComplete onComplete, bool autoRetry)
         {
             isUpdateing = false;
             ByteFileInfoList erroListInfo = GetErroListInfo(downLoadGroup, pInfo);
@@ -179,14 +208,11 @@ namespace LitEngine.UpdateTool
             }
         }
 
-        void CallUpdateOnComplete(System.Action<ByteFileInfoList, string> onComplete, ByteFileInfoList pInfo, string pError)
+        void CallUpdateOnComplete(UpdateComplete onComplete, ByteFileInfoList pInfo, string pError)
         {
             try
             {
-                if (downLoadGroup != null)
-                {
-                    downLoadGroup.Dispose();
-                }
+                ReleaseGroupLoader();
                 ReTryCount = 0;
                 onComplete?.Invoke(pInfo, pError);
             }
@@ -221,8 +247,14 @@ namespace LitEngine.UpdateTool
         #endregion
 
         #region check
-
-        static public void CheckUpdate(System.Action<ByteFileInfoList> onComplete, bool needRetry = false)
+        public delegate void CheckComplete(ByteFileInfoList info, string error);
+        void ReleaseCheckLoader()
+        {
+            if (checkLoader == null) return;
+            checkLoader.Dispose();
+            checkLoader = null;
+        }
+        static public void CheckUpdate(CheckComplete onComplete, bool useCache, bool needRetry)
         {
             if (isChecking || isUpdateing)
             {
@@ -230,45 +262,46 @@ namespace LitEngine.UpdateTool
                 return;
             }
             isChecking = true;
-            Instance.StartCoroutine(sInstance.WaitStartCheck(0.1f, onComplete, needRetry));
+            Instance.StartCoroutine(sInstance.WaitStartCheck(0.1f, onComplete, useCache, needRetry));
         }
 
-        IEnumerator WaitStartCheck(float delayTime, System.Action<ByteFileInfoList> onComplete, bool needRetry)
+        IEnumerator WaitStartCheck(float delayTime, CheckComplete onComplete, bool useCache, bool needRetry)
         {
             yield return new WaitForSeconds(delayTime);
-            Instance.StartCoroutine(sInstance.CheckingUpdate(onComplete, needRetry));
+            Instance.StartCoroutine(sInstance.CheckingUpdate(onComplete, useCache, needRetry));
         }
 
-        IEnumerator CheckingUpdate(System.Action<ByteFileInfoList> onComplete, bool needRetry)
+        IEnumerator CheckingUpdate(CheckComplete onComplete, bool useCache, bool needRetry)
         {
+            ReleaseCheckLoader();
+
             string tdicpath = string.Format("{0}/{1}/", updateData.server, updateData.version);
             string tuf = tdicpath + LoadManager.byteFileInfoFileName;
             string tcheckfile = GetCheckFileName();
             string tfilePath = Path.Combine(LoadManager.sidePath, tcheckfile);
-            if (!File.Exists(tfilePath))
+            if (!useCache || !File.Exists(tfilePath))
             {
-                DownLoader tdl = DownLoadManager.DownLoadFileAsync(tuf, LoadManager.sidePath, tcheckfile, null, 0, null);
-                while (!tdl.IsDone)
+                checkLoader = DownLoadManager.DownLoadFileAsync(tuf, LoadManager.sidePath, tcheckfile, null, 0, null);
+                while (!checkLoader.IsDone)
                 {
                     yield return null;
                 }
-                DownLoadCheckFileEnd(tdl, onComplete, needRetry);
+                DownLoadCheckFileEnd(checkLoader, onComplete, useCache, needRetry);
             }
             else
             {
                 DownLoadCheckFileFinished(onComplete);
             }
-
         }
 
-        void DownLoadCheckFileFinished(System.Action<ByteFileInfoList> onComplete)
+        void DownLoadCheckFileFinished(CheckComplete onComplete)
         {
             isChecking = false;
             ByteFileInfoList ret = GetNeedDownloadFiles(GetUpdateList());
             CallCheckOnComplete(onComplete, ret);
         }
 
-        void DownLoadCheckFileFail(System.Action<ByteFileInfoList> onComplete, bool needRetry)
+        void DownLoadCheckFileFail(CheckComplete onComplete, bool useCache, bool needRetry)
         {
             isChecking = false;
             if (ReTryCheckCount >= ReTryMaxCount)
@@ -279,7 +312,7 @@ namespace LitEngine.UpdateTool
             if (needRetry)
             {
                 ReTryCheckCount++;
-                CheckUpdate(onComplete, needRetry);
+                CheckUpdate(onComplete, useCache, needRetry);
             }
             else
             {
@@ -287,7 +320,7 @@ namespace LitEngine.UpdateTool
             }
         }
 
-        void DownLoadCheckFileEnd(DownLoader dloader, System.Action<ByteFileInfoList> onComplete, bool needRetry)
+        void DownLoadCheckFileEnd(DownLoader dloader, CheckComplete onComplete, bool useCache, bool needRetry)
         {
             if (dloader.Error == null)
             {
@@ -296,16 +329,20 @@ namespace LitEngine.UpdateTool
             else
             {
                 Debug.Log(dloader.Error);
-                DownLoadCheckFileFail(onComplete, needRetry);
+                DownLoadCheckFileFail(onComplete, useCache, needRetry);
             }
         }
 
-        static void CallCheckOnComplete(System.Action<ByteFileInfoList> onComplete, ByteFileInfoList pObj)
+        void CallCheckOnComplete(CheckComplete onComplete, ByteFileInfoList pObj)
         {
             try
             {
+                string error = checkLoader != null ? checkLoader.Error : null;
+
+                ReleaseCheckLoader();
                 ReTryCheckCount = 0;
-                onComplete?.Invoke(pObj);
+
+                onComplete?.Invoke(pObj, error);
             }
             catch (System.Exception erro)
             {

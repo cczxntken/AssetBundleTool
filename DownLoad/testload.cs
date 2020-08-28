@@ -7,7 +7,7 @@ using LitEngine.LoadAsset;
 public class testload : MonoBehaviour
 {
     // Start is called before the first frame update
-    void Start()
+    IEnumerator Start()
     {
         string tqq = "https://down.qq.com/qqweb/PCQQ/PCQQ_EXE/PCQQ2020.exe";
         string wx = "https://dldir1.qq.com/weixin/android/weixin7017android1720_arm64.apk";
@@ -19,18 +19,25 @@ public class testload : MonoBehaviour
         //    testload.AddByUrl(wx,Application.dataPath+"/../","testdownload/wx.apk","ddddffff44",10,true);
 
         //    testload.StartAsync();
-
-        UpdateManager.CheckUpdate((b) =>
+        Debug.Log(UpdateAssetManager.Ins.checkType);
+        UpdateAssetManager.Ins.CheckUpdate();
+        Debug.Log(UpdateAssetManager.Ins.checkType);
+        while (UpdateAssetManager.Ins.checkType == UpdateAssetManager.CheckType.checking)
         {
-            if(b != null && b.fileMap.Count > 0)
+            yield return null;
+        }
+        Debug.Log(UpdateAssetManager.Ins.checkType);
+        if (UpdateAssetManager.Ins.checkType == UpdateAssetManager.CheckType.needUpdate)
+        {
+            Debug.Log(UpdateAssetManager.Ins.updateType);
+            UpdateAssetManager.Ins.UpdateAssets();
+            Debug.Log(UpdateAssetManager.Ins.updateType);
+            while (UpdateAssetManager.Ins.updateType == UpdateAssetManager.UpdateType.updateing)
             {
-                UpdateManager.UpdateRes(b,UpdateComplete,true);
+                yield return null;
             }
-            else
-            {
-                
-            }
-        });
+            Debug.Log(UpdateAssetManager.Ins.updateType);
+        }
     }
 
     void UpdateComplete(ByteFileInfoList pInfo,string pError)
