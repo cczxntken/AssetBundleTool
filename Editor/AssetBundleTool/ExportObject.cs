@@ -72,7 +72,7 @@ namespace LitEngineEditor
                 if (string.IsNullOrEmpty(ExportSetting.Instance.sMoveAssetsFilePath)) return;
                 Config.LoadConfig();
                 BuildTarget _target = sBuildTarget[ExportSetting.Instance.sSelectedPlatm];
-                string tpath = Config.sDefaultFolder + ExportConfig.GetTartFolder(_target);
+                string tpath = GetExportPath(_target);
                 MoveToPath(tpath, ExportSetting.Instance.sMoveAssetsFilePath, ExportConfig.GetTartFolder(_target));
             }
         }
@@ -83,7 +83,7 @@ namespace LitEngineEditor
         public static void ExportAllBundleFullPath(BuildTarget _target)
         {
             waitExportFiles.Clear();
-            string tpath = Config.sDefaultFolder + ExportConfig.GetTartFolder(_target);
+            string tpath = GetExportPath(_target);
 
             List<UnityEditor.AssetBundleBuild> builds = null;
 
@@ -91,7 +91,7 @@ namespace LitEngineEditor
             {
                 case 0:
                 case 1:
-                    builds = GetBunldeBuildsEvery(tpath);
+                    builds = GetBunldeBuildsEvery(tpath,ExportSetting.Instance.sBuildType == 0);
                     break;
                 case 2:
                     builds = GetBunldeBuildsAllInOne(tpath);
@@ -101,6 +101,11 @@ namespace LitEngineEditor
                     break;
             }
             GoExport(tpath, builds.ToArray(), _target);
+        }
+
+        static public string GetExportPath(BuildTarget target)
+        {
+            return Config.sDefaultFolder + ExportConfig.GetTartFolder(target);
         }
 
         static List<UnityEditor.AssetBundleBuild> GetBunldeBuildsFolder(string path)
@@ -136,7 +141,7 @@ namespace LitEngineEditor
             EditorUtility.ClearProgressBar();
             return builds;
         }
-        static List<UnityEditor.AssetBundleBuild> GetBunldeBuildsAllInOne(string path)
+        static public List<UnityEditor.AssetBundleBuild> GetBunldeBuildsAllInOne(string path)
         {
             waitExportFiles.Clear();
             string tpath = path;
@@ -164,7 +169,7 @@ namespace LitEngineEditor
             EditorUtility.ClearProgressBar();
             return builds;
         }
-        static List<UnityEditor.AssetBundleBuild> GetBunldeBuildsEvery(string path)
+        static public List<UnityEditor.AssetBundleBuild> GetBunldeBuildsEvery(string path,bool isHaveDep)
         {
             waitExportFiles.Clear();
             string tpath = path;
@@ -189,7 +194,7 @@ namespace LitEngineEditor
                 builds.Add(tbuild);
 
                 waitExportFiles.Add(tresPath, tbuild);
-                if (ExportSetting.Instance.sBuildType == 0)
+                if (isHaveDep)
                 {
                     AddAssetFromDependencles(tresPath, ref builds);
                 }
@@ -200,7 +205,7 @@ namespace LitEngineEditor
             return builds;
         }
 
-        static string GetResPath(string pFullPath)
+        static public string GetResPath(string pFullPath)
         {
             string tresPath = pFullPath;
             int tindex = tresPath.IndexOf("Assets");
@@ -225,7 +230,7 @@ namespace LitEngineEditor
                 AddAssetFromDependencles(item,ref buildList);
             }
         }
-        static UnityEditor.AssetBundleBuild GetAssetBundleBuild(string pFileName)
+        static public UnityEditor.AssetBundleBuild GetAssetBundleBuild(string pFileName)
         {
             string tresPath = GetResPath(pFileName);
             UnityEditor.AssetBundleBuild tbuild = new UnityEditor.AssetBundleBuild();
@@ -255,20 +260,20 @@ namespace LitEngineEditor
 
         #region move
 
-        static void MoveBUndleToStreamingPath(BuildTarget _target)
+        static public void MoveBUndleToStreamingPath(BuildTarget _target)
         {
             Config.LoadConfig();
-            string tpath = Config.sDefaultFolder + ExportConfig.GetTartFolder(_target);
+            string tpath = GetExportPath(_target);
             string tfullpath = System.IO.Directory.GetCurrentDirectory() + "\\" + Config.sStreamingBundleFolder + ExportConfig.sResDataPath;
             tfullpath = tfullpath.Replace("\\", "/");
             MoveToPath(tpath, tfullpath, ExportConfig.GetTartFolder(_target));
             AssetDatabase.Refresh();
         }
 
-        static void MoveBundleToSideDate(BuildTarget _target)
+        static public void MoveBundleToSideDate(BuildTarget _target)
         {
             Config.LoadConfig();
-            string tpath = Config.sDefaultFolder  + ExportConfig.GetTartFolder(_target);
+            string tpath = GetExportPath(_target);
             string tfullpath = System.IO.Directory.GetCurrentDirectory() + "\\" + Config.sEditorBundleFolder  + ExportConfig.sResDataPath;
             tfullpath = tfullpath.Replace("\\", "/");
             MoveToPath(tpath, tfullpath, ExportConfig.GetTartFolder(_target));
@@ -348,7 +353,7 @@ namespace LitEngineEditor
         #endregion
 
         #region fileinfo
-        static void BuildByteFileInfoFile(string pSocPath, string pDesPath, BuildTarget _target)
+        static public void BuildByteFileInfoFile(string pSocPath, string pDesPath, BuildTarget _target)
         {
             pSocPath = pSocPath.Replace("//", "/");
             DirectoryInfo tdirfolder = new DirectoryInfo(pSocPath);

@@ -7,8 +7,20 @@ namespace LitEngineEditor
 {
     public class EXportMenuTool
     {
+        
+        [UnityEditor.MenuItem("Export/IOS生成资源表及资源")]
+        static public void BuildIOSAssetProcess()
+        {
+            CreatModelAsset();
+            ExportSetting.Instance.sSelectedPlatm = 1;
+            ExportSetting.Instance.sCompressed = 0;
+            ExportSetting.Instance.sBuildType = 1;
+            ExportObject.ExportAllBundleFullPath(ExportObject.sBuildTarget[ExportSetting.Instance.sSelectedPlatm]);
+            ExportObject.MoveBUndleToStreamingPath(ExportObject.sBuildTarget[ExportSetting.Instance.sSelectedPlatm]);
+        }
+
         [UnityEditor.MenuItem("Export/生成Resources预留资源表")]
-        static void CreatModelAsset()
+        static public void CreatModelAsset()
         {
             string tgamepath = "Assets/Resources/Game/Models";
             string texpaths = "Assets/Resources/Game/ModelsTexture";

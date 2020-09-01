@@ -1,28 +1,50 @@
-﻿using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
-using LitEngine.DownLoad;
+using System.Collections;
 using LitEngine.UpdateTool;
-using LitEngine.LoadAsset;
-public class testload : MonoBehaviour
+public class UpdateCheckTool : MonoBehaviour
 {
-    // Start is called before the first frame update
-    void Start()
+    public delegate void UpdateAction();
+    private static UpdateCheckTool sInstance = null;
+    private static UpdateCheckTool Ins
     {
-        string tqq = "https://down.qq.com/qqweb/PCQQ/PCQQ_EXE/PCQQ2020.exe";
-        string wx = "https://dldir1.qq.com/weixin/android/weixin7017android1720_arm64.apk";
-        //    DownLoadGroup testload = new DownLoadGroup("testgroup");
-        //    testload.onComplete += DownloadCompleteG;
-        //    testload.OnProgress += DownloadProcessG;
-
-        //    testload.AddByUrl(tqq,Application.dataPath+"/../","testdownload/qq.exe","3434fdf99df9sfaa",10,true);
-        //    testload.AddByUrl(wx,Application.dataPath+"/../","testdownload/wx.apk","ddddffff44",10,true);
-
-        //    testload.StartAsync();
-      
-        StartCoroutine(Check());
+        get
+        {
+            if (sInstance == null)
+            {
+                GameObject tobj = new GameObject("UpdateCheckTool");
+                GameObject.DontDestroyOnLoad(tobj);
+                sInstance = tobj.AddComponent<UpdateCheckTool>();
+                sInstance.Init();
+            }
+            return sInstance;
+        }
     }
 
+    private bool mInited = false;
+
+    private void Init()
+    {
+        if (mInited) return;
+        mInited = true;
+    }
+
+    #region 更新
+    /// <summary>
+    /// 更新检测示例
+    /// </summary>
+    /// <returns></returns>
+    static public bool CheckUpdate()
+    {
+        if (UpdateAssetManager.Ins.checkType == UpdateAssetManager.CheckType.AllGood)
+        {
+            return false;
+        }
+        else
+        {
+            Ins.StartCoroutine(Ins.Check());
+            return true;
+        }
+    }
     IEnumerator Check()
     {
         yield return null;
@@ -30,11 +52,14 @@ public class testload : MonoBehaviour
         if (UpdateAssetManager.Ins.checkType == UpdateAssetManager.CheckType.AllGood)
         {
             //不需要更新
-
         }
         else
         {
-            UpdateAssetManager.Ins.CheckUpdate();
+            if(UpdateAssetManager.Ins.checkType != UpdateAssetManager.CheckType.checking)
+            {
+                UpdateAssetManager.Ins.CheckUpdate();
+            }
+            
             while (UpdateAssetManager.Ins.checkType == UpdateAssetManager.CheckType.checking)
             {
                 yield return null;
@@ -75,14 +100,18 @@ public class testload : MonoBehaviour
         else
         {
             Debug.Log(UpdateAssetManager.Ins.updateType);
-            UpdateAssetManager.Ins.UpdateAssets();
+            if(UpdateAssetManager.Ins.updateType != UpdateAssetManager.UpdateType.updateing)
+            {
+                UpdateAssetManager.Ins.UpdateAssets();
+            }
+            
             Debug.Log(UpdateAssetManager.Ins.updateType);
             while (UpdateAssetManager.Ins.updateType == UpdateAssetManager.UpdateType.updateing)
             {
                 Debug.Log(UpdateAssetManager.Ins.DownLoadLength + "/" + UpdateAssetManager.Ins.ContentLength + "|" + UpdateAssetManager.Ins.UpdateProcess);
                 yield return null;
             }
-
+            Debug.Log(UpdateAssetManager.Ins.updateType);
             switch (UpdateAssetManager.Ins.updateType)
             {
                 case UpdateAssetManager.UpdateType.fail:
@@ -102,31 +131,5 @@ public class testload : MonoBehaviour
         }
 
     }
-
-    void UpdateComplete(ByteFileInfoList pInfo,string pError)
-    {
-        Debug.Log(pError);
-        if(pError == null)
-        {
-
-        }
-    }
-
-    void DownloadComplete(DownLoader pSender)
-    {
-        Debug.Log("DownloadComplete-" + pSender.CompleteFile + " - error:" + pSender.Error);
-    }
-    void DownloadProcess(DownLoader pSender)
-    {
-        Debug.Log(pSender.Progress);
-    }
-
-    void DownloadCompleteG(DownLoadGroup pSender)
-    {
-        Debug.Log("DownloadComplete-" + pSender.Key + " - error:" + pSender.Error);
-    }
-    void DownloadProcessG(DownLoadGroup pSender)
-    {
-        Debug.Log(pSender.Progress);
-    }
+    #endregion
 }

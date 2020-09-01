@@ -98,6 +98,13 @@ namespace LitEngine.UpdateTool
                 return Instance.downLoadGroup;
             }
         }
+        static public DownLoader checkDL
+        {
+            get
+            {
+                return Instance.checkLoader;
+            }
+        }
         static public bool IsRuningUpdate
         {
             get
@@ -147,12 +154,11 @@ namespace LitEngine.UpdateTool
 
         IEnumerator FileUpdateing(ByteFileInfoList pInfo, UpdateComplete onComplete, bool autoRetry)
         {
-            string tdicpath = string.Format("{0}/{1}/", updateData.server, updateData.version);
             ReleaseGroupLoader();
             downLoadGroup = new DownLoadGroup("updateGroup");
             foreach (var item in pInfo.fileInfoList)
             {
-                string turl = tdicpath + item.resName;
+                string turl = GetServerUrl(item.resName);
                 var tloader = downLoadGroup.AddByUrl(turl, LoadManager.sidePath, item.resName, item.fileMD5, item.fileSize, false);
                 tloader.priority = item.priority;
                 tloader.OnComplete += (a) =>
@@ -276,7 +282,7 @@ namespace LitEngine.UpdateTool
             ReleaseCheckLoader();
 
             string tdicpath = string.Format("{0}/{1}/", updateData.server, updateData.version);
-            string tuf = tdicpath + LoadManager.byteFileInfoFileName;
+            string tuf = GetServerUrl(LoadManager.byteFileInfoFileName + LoadManager.sSuffixName);
             string tcheckfile = GetCheckFileName();
             string tfilePath = Path.Combine(LoadManager.sidePath, tcheckfile);
             if (!useCache || !File.Exists(tfilePath))
@@ -428,5 +434,16 @@ namespace LitEngine.UpdateTool
             }
         }
         #endregion
+
+        public string GetServerUrl(string pFile)
+        {
+#if UNITY_IOS
+    return string.Format("{0}/{1}/{2}/{3}", updateData.server, "ios", updateData.version,pFile);
+#elif UNITY_ANDROID
+    return string.Format("{0}/{1}/{2}/{3}", updateData.server, "android", updateData.version,pFile);
+#else
+    return string.Format("{0}/{1}/{2}/{3}", updateData.server, Application.platform.ToString(), updateData.version,pFile);
+#endif
+        }
     }
 }
