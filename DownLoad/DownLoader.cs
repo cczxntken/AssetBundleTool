@@ -40,8 +40,7 @@ namespace LitEngine.DownLoad
 
         public string MD5String { get; private set; }
         public long ContentLength { get; private set; }//需要下载的长度
-        public long DownLoadedLength { get; private set; }//已下载长度
-        public long InitContentLength { get; private set; }//预下载长度
+        public long DownLoadedLength { get; private set; }//总下载长度
 
 
         private bool mIsClear = false;//是否清除断点续传
@@ -52,7 +51,7 @@ namespace LitEngine.DownLoad
         private WebResponse mResponse;
         private Stream mHttpStream;
 
-
+        
         #endregion
         #region 构造析构
         public DownLoader(string pSourceurl, string pDestination,string pFileName = null,string pMD5 = null,long pLength = 0, bool pClear = true)
@@ -63,7 +62,7 @@ namespace LitEngine.DownLoad
             FileName = pFileName;
             MD5String = pMD5;
             mIsClear = pClear;
-            InitContentLength = pLength;
+            ContentLength = pLength;
 
 
             string[] turlstrs = SourceURL.Split('/');
@@ -98,12 +97,17 @@ namespace LitEngine.DownLoad
                 return;
             mDisposed = true;
 
-            IsDone = true;
-            mThreadRuning = false;
-            CloseHttpClient();
+            Stop();
             OnComplete = null;
             OnProgress = null;
             OnStart = null;
+        }
+
+        public void Stop()
+        {
+            IsDone = true;
+            mThreadRuning = false;
+            CloseHttpClient();
         }
         #endregion
 
@@ -128,6 +132,8 @@ namespace LitEngine.DownLoad
 
         private void ReadNetByte()
         {
+            float tdownloadSize = 0;
+            float tneedDownLoadSize = 0;
             FileStream ttempfile = null;
             try
             {
@@ -142,21 +148,24 @@ namespace LitEngine.DownLoad
                 }
 
                 long thaveindex = 0;
-                if (File.Exists(TempFile))
+                bool isFirst = !File.Exists(TempFile);
+                bool isClearDownload = isFirst || mIsClear;
+                if (isClearDownload)
                 {
-
-                    if (!mIsClear)
+                    if (!isFirst)
+                    {
+                        File.Delete(TempFile);
+                    }
+                    thaveindex = 0;
+                }
+                else
+                {
+                    if (!isFirst)
                     {
                         ttempfile = System.IO.File.OpenWrite(TempFile);
                         thaveindex = ttempfile.Length;
                         ttempfile.Seek(thaveindex, SeekOrigin.Current);
                     }
-                    else
-                    {
-                        File.Delete(TempFile);
-                        thaveindex = 0;
-                    }
-
                 }
 
                 mReqest = (HttpWebRequest)HttpWebRequest.Create(SourceURL);
@@ -189,14 +198,20 @@ namespace LitEngine.DownLoad
                 }
 
                 mHttpStream = mResponse.GetResponseStream();
-                ContentLength = mResponse.ContentLength;
-                InitContentLength = ContentLength;//重置为实际大小
+                tneedDownLoadSize = mResponse.ContentLength;
+                
+                DownLoadedLength = thaveindex;
+                if(isClearDownload)
+                {
+                    ContentLength = mResponse.ContentLength;
+                }    
 
                 if (ttempfile == null)
                 {
                     ttempfile = System.IO.File.Create(TempFile);
                 }
-                    
+                
+               
                 int tcount = 0;
                 int tlen = 1024;
                 byte[] tbuffer = new byte[tlen];
@@ -205,6 +220,8 @@ namespace LitEngine.DownLoad
                 while (tReadSize > 0 && mThreadRuning)
                 {
                     DownLoadedLength += tReadSize;
+                    tdownloadSize += tReadSize;
+
                     ttempfile.Write(tbuffer, 0, tReadSize);
                     tReadSize = mHttpStream.Read(tbuffer, 0, tlen);
 
@@ -228,7 +245,7 @@ namespace LitEngine.DownLoad
 
             try
             {
-                if (DownLoadedLength == ContentLength)
+                if (tdownloadSize == tneedDownLoadSize)
                 {
                     if (File.Exists(TempFile))
                     {

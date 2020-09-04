@@ -68,6 +68,17 @@ namespace LitEngine.DownLoad
             onComplete = null;
             OnProgress = null;
         }
+
+        public void Stop()
+        {
+            for (int i = 0; i < groupList.Count; i++)
+            {
+                groupList[i].Stop();
+            }
+            Error = "下载中断.";
+            IsDone = true;
+            State = DownloadState.finished;
+        }
         #endregion
 
         public DownLoader AddByUrl(string pSourceurl, string pDestination, string pFileName,string pMD5, long pLength, bool pClear)
@@ -111,7 +122,7 @@ namespace LitEngine.DownLoad
                 {
                     DownLoadManager.DownLoadFileAsync(groupList[i],null,null);
                 }
-                ContentLength += groupList[i].InitContentLength;
+                ContentLength += groupList[i].ContentLength;
             }
             Error = null;
             IsDone = false;
@@ -156,11 +167,13 @@ namespace LitEngine.DownLoad
             bool isAllDone = true;
             DownLoadedLength = 0;
             Progress = 0;
+            ContentLength = 0;
             for (int i = 0; i < groupList.Count; i++)
             {
                 var item = groupList[i];
                 DownLoadedLength += item.DownLoadedLength;
                 Progress += item.Progress;
+                ContentLength += item.ContentLength;
                 if (!groupList[i].IsCompleteDownLoad)
                 {
                     item.Update();

@@ -18,6 +18,7 @@ namespace LitEngine.UpdateTool
         {
             none = 0,
             updateing,
+            pause,
             fail,
             finished,
         }
@@ -47,16 +48,19 @@ namespace LitEngine.UpdateTool
         #endregion
 
         #region prop
+        public bool AutoUpdate { get; set; }
         public CheckType checkType { get; private set; }
         public UpdateType updateType { get; private set; }
         public ByteFileInfoList updateList { get; private set; }
 
+        private float _CheckProcess = 0;
         public float CheckProcess
         {
             get
             {
-                if (UpdateManager.checkDL == null) return 1;
-                return UpdateManager.checkDL.Progress;
+                if (UpdateManager.checkDL == null) return _CheckProcess;
+                _CheckProcess = UpdateManager.checkDL.Progress;
+                return _CheckProcess;
             }
         }
 
@@ -64,8 +68,7 @@ namespace LitEngine.UpdateTool
         {
             get
             {
-                if (UpdateManager.updateGroup == null) return 1;
-                return UpdateManager.updateGroup.Progress;
+                return UpdateManager.DownloadProcess;
             }
         }
 
@@ -73,16 +76,26 @@ namespace LitEngine.UpdateTool
         {
             get
             {
-                if (UpdateManager.updateGroup == null) return 0;
-                return UpdateManager.updateGroup.DownLoadedLength;
+                return UpdateManager.DownLoadLength;
             }
         }
+
         public long ContentLength
         {
             get
             {
-                if (UpdateManager.updateGroup == null) return 0;
-                return UpdateManager.updateGroup.ContentLength;
+                return UpdateManager.ContentLength;
+            }
+        }
+
+        public bool CanUpdate
+        {
+            get
+            {
+                return updateType != UpdateType.updateing
+                    && updateType != UpdateType.finished
+                    && checkType == CheckType.needUpdate
+                    && AutoUpdate;
             }
         }
         #endregion
@@ -90,6 +103,32 @@ namespace LitEngine.UpdateTool
         {
             checkType = CheckType.none;
             updateType = UpdateType.none;
+            AutoUpdate = true;
+        }
+
+        public void Pause()
+        {
+            if(updateType != UpdateType.updateing) return;
+            if(updateType == UpdateType.pause) return;
+            updateType = UpdateType.pause;
+            UpdateManager.StopAll();
+            AutoUpdate = false;
+        }
+        public bool Resume()
+        {
+            if (checkType != CheckType.needUpdate) return false;
+            if (updateType != UpdateType.pause) return false;
+            bool istart = UpdateManager.ReStart();
+            if (istart)
+            {
+                updateType = UpdateType.updateing;
+            }
+            else
+            {
+                updateType = UpdateType.fail;
+            }
+            AutoUpdate = true;
+            return istart;
         }
         #region update
         public void UpdateAssets()
@@ -98,6 +137,7 @@ namespace LitEngine.UpdateTool
             switch (updateType)
             {
                 case UpdateType.none:
+                case UpdateType.pause:
                 case UpdateType.fail:
                     CaseUpdateFail();
                     break;
@@ -135,7 +175,7 @@ namespace LitEngine.UpdateTool
 
         void OnUpdateComplete(ByteFileInfoList info, string error)
         {
-            if (error == null)
+            if (string.IsNullOrEmpty(error))
             {
                 updateType = UpdateType.finished;
                 checkType = CheckType.AllGood;

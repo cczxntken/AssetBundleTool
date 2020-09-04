@@ -77,20 +77,14 @@ namespace LitEngine.UpdateTool
         private void OnDisable()
         {
             Stop();
-        }
-
-        private void Stop()
-        {
-            StopAllCoroutines();
-            ReTryCount = 0;
-            ReTryCheckCount = 0;
-            isUpdateing = false;
-            isChecking = false;
             ReleaseGroupLoader();
             ReleaseCheckLoader();
         }
 
         #region prop
+        static public float DownloadProcess { get; private set; }
+        static public long DownLoadLength { get; private set; }
+        static public long ContentLength { get; private set; }
         static public DownLoadGroup updateGroup
         {
             get
@@ -116,11 +110,15 @@ namespace LitEngine.UpdateTool
         static bool isUpdateing = false;
         static bool isChecking = false;
 
-        static int ReTryMaxCount = 5;
-        static int ReTryCount = 0;
-        static int ReTryCheckCount = 0;
+        int ReTryMaxCount = 20;
+        int ReTryCount = 0;
+        int ReTryCheckCount = 0;
         DownLoadGroup downLoadGroup;
         DownLoader checkLoader;
+
+        ByteFileInfoList curInfo;
+        UpdateComplete curOnComplete;
+        bool curAutoRetry;
         #endregion
 
         #region update
@@ -129,11 +127,43 @@ namespace LitEngine.UpdateTool
         {
             Instance.Stop();
         }
+        static public bool ReStart()
+        {
+           return Instance.ReTryGroupDownload();
+        }
+
+        private void Stop()
+        {
+            StopAllCoroutines();
+            ReTryCount = 0;
+            ReTryCheckCount = 0;
+            isUpdateing = false;
+            isChecking = false;
+            StopGroupLoader();
+        }
         void ReleaseGroupLoader()
         {
             if (downLoadGroup == null) return;
             downLoadGroup.Dispose();
             downLoadGroup = null;
+        }
+        void StopGroupLoader()
+        {
+            if (downLoadGroup == null) return;
+            downLoadGroup.Stop();
+        }
+        bool ReTryGroupDownload()
+        {
+            if (isUpdateing)
+            {
+                Debug.LogError("更新中,请勿重复调用.");
+                return false;
+            }
+            if (downLoadGroup == null || downLoadGroup.IsCompleteDownLoad) return false;
+            isUpdateing = true;
+            downLoadGroup.ReTryAsync();
+            StartCoroutine(WaitUpdateDone());
+            return true;
         }
         static public void UpdateRes(ByteFileInfoList pInfo, UpdateComplete onComplete, bool autoRetry)
         {
@@ -149,11 +179,14 @@ namespace LitEngine.UpdateTool
         IEnumerator WaitStarUpdate(float delayTime, ByteFileInfoList pInfo, UpdateComplete onComplete, bool autoRetry)
         {
             yield return new WaitForSeconds(delayTime);
-            Instance.StartCoroutine(Instance.FileUpdateing(pInfo, onComplete, autoRetry));
+            Instance.FileUpdateing(pInfo, onComplete, autoRetry);
         }
 
-        IEnumerator FileUpdateing(ByteFileInfoList pInfo, UpdateComplete onComplete, bool autoRetry)
+        void FileUpdateing(ByteFileInfoList pInfo, UpdateComplete onComplete, bool autoRetry)
         {
+            curInfo = pInfo;
+            curOnComplete = onComplete;
+            curAutoRetry = autoRetry;
             ReleaseGroupLoader();
             downLoadGroup = new DownLoadGroup("updateGroup");
             foreach (var item in pInfo.fileInfoList)
@@ -170,47 +203,70 @@ namespace LitEngine.UpdateTool
                 };
             }
             downLoadGroup.StartAsync();
+            UpdateProcess();
+            
+            StartCoroutine(WaitUpdateDone());
 
+        }
+
+        IEnumerator WaitUpdateDone()
+        {
             while (!downLoadGroup.IsDone)
             {
+                UpdateProcess();
                 yield return null;
             }
-
+            UpdateProcess();
             if (string.IsNullOrEmpty(downLoadGroup.Error))
             {
-                UpdateFileFinished(onComplete);
+                UpdateFileFinished();
             }
             else
             {
-                UpdateFileFail(pInfo, onComplete, autoRetry);
+                UpdateFileFail();
             }
-
         }
 
-        void UpdateFileFinished(UpdateComplete onComplete)
+        IEnumerator WaitReTryUpdate()
+        {
+            yield return new WaitForSeconds(5f);
+            downLoadGroup.ReTryAsync();
+            StartCoroutine(WaitUpdateDone());
+        }
+
+        void UpdateProcess()
+        {
+            if(downLoadGroup == null) return;
+            DownloadProcess = downLoadGroup.Progress;
+            ContentLength = downLoadGroup.ContentLength;
+            DownLoadLength = downLoadGroup.DownLoadedLength;
+        }
+
+        void UpdateFileFinished()
         {
             isUpdateing = false;
             UpdateLocalList();
-            CallUpdateOnComplete(onComplete, null, null);
+            CallUpdateOnComplete(curOnComplete, null, null);
         }
 
-        void UpdateFileFail(ByteFileInfoList pInfo, UpdateComplete onComplete, bool autoRetry)
+        void UpdateFileFail()
         {
             isUpdateing = false;
-            ByteFileInfoList erroListInfo = GetErroListInfo(downLoadGroup, pInfo);
+            
             if (ReTryCount >= ReTryMaxCount)
             {
-                autoRetry = false;
+                curAutoRetry = false;
             }
-            if (!autoRetry)
+            if (!curAutoRetry)
             {
-                CallUpdateOnComplete(onComplete, erroListInfo, downLoadGroup.Error);
+                ByteFileInfoList erroListInfo = GetErroListInfo(downLoadGroup, curInfo);
+                CallUpdateOnComplete(curOnComplete, erroListInfo, downLoadGroup.Error);
             }
             else
             {
                 Debug.Log(downLoadGroup.Error);
                 ReTryCount++;
-                UpdateRes(erroListInfo, onComplete, autoRetry);
+                StartCoroutine(WaitReTryUpdate());
             }
         }
 
@@ -300,6 +356,12 @@ namespace LitEngine.UpdateTool
             }
         }
 
+        IEnumerator WaitRetryCheck(CheckComplete onComplete, bool useCache, bool needRetry)
+        {
+            yield return new WaitForSeconds(5);
+            CheckUpdate(onComplete, useCache, needRetry);
+        }
+
         void DownLoadCheckFileFinished(CheckComplete onComplete)
         {
             isChecking = false;
@@ -318,7 +380,7 @@ namespace LitEngine.UpdateTool
             if (needRetry)
             {
                 ReTryCheckCount++;
-                CheckUpdate(onComplete, useCache, needRetry);
+                StartCoroutine(WaitRetryCheck(onComplete, useCache, needRetry));
             }
             else
             {
@@ -437,13 +499,15 @@ namespace LitEngine.UpdateTool
 
         public string GetServerUrl(string pFile)
         {
+            string serverUrl = S3SendClient.GetHTTPPATH();
 #if UNITY_IOS
-    return string.Format("{0}/{1}/{2}/{3}", updateData.server, "ios", updateData.version,pFile);
+            string assetPath = string.Format("{0}/{1}/{2}/{3}", updateData.server, "ios", updateData.version,pFile);
 #elif UNITY_ANDROID
-    return string.Format("{0}/{1}/{2}/{3}", updateData.server, "android", updateData.version,pFile);
+            string assetPath = string.Format("{0}/{1}/{2}/{3}", updateData.server, "android", updateData.version, pFile);
 #else
-    return string.Format("{0}/{1}/{2}/{3}", updateData.server, Application.platform.ToString(), updateData.version,pFile);
+            string assetPath = string.Format("{0}/{1}/{2}/{3}", updateData.server, Application.platform.ToString(), updateData.version,pFile);
 #endif
+            return serverUrl + assetPath;
         }
     }
 }
