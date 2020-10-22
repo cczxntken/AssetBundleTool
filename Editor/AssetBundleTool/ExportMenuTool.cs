@@ -33,25 +33,27 @@ namespace LitEngineEditor
             asset.assets = tfiles.ToArray();
             AssetDatabase.CreateAsset(asset, "Assets/Resources/ResourcesMap.asset");
             AssetDatabase.Refresh();
+            Debug.Log("生成资源表成功.");
         }
 
         static List<AssetMap.AssetObject> GetFileList(string pFullPath,bool isInSide)
         {
             List<AssetMap.AssetObject> tassetNames = new List<AssetMap.AssetObject>();
-            DirectoryInfo tdirfolder = new DirectoryInfo(pFullPath);
+            if (!Directory.Exists(pFullPath))
+            {
+                return tassetNames;
+            }
+            string trepPath = Application.dataPath;
+            DirectoryInfo tdirfolder = new DirectoryInfo(pFullPath);   
             FileInfo[] tfileinfos = tdirfolder.GetFiles("*.*", System.IO.SearchOption.AllDirectories);
-
             for (int i = 0, tmax = tfileinfos.Length; i < tmax; i++)
             {
                 FileInfo tfile = tfileinfos[i];
                 if (!ExportObject.IsResFile(tfile.Name)) continue;
-
-                string tresPath = tfile.FullName;
-                string tfindstr = "Resources/";
+                string tresPath = ExportObject.GetFormatPath(tfile.FullName).Replace(trepPath,"").ToLowerInvariant();
+                string tfindstr = "Resources/".ToLowerInvariant();
                 int tindex = tresPath.IndexOf(tfindstr) + tfindstr.Length;
                 tresPath = tresPath.Substring(tindex, tresPath.Length - tindex);
-                tresPath = tresPath.Replace("\\", "/");
-                tresPath = tresPath.ToLowerInvariant();
                 AssetMap.AssetObject tobj = new AssetMap.AssetObject(tresPath);
                 tobj.isInSide = isInSide;
                 tassetNames.Add(tobj);
@@ -71,20 +73,15 @@ namespace LitEngineEditor
 
             CreatLitEngineFolders(ExportBase.Config.sStreamingBundleFolder);
             CreatLitEngineFolders(ExportBase.Config.sEditorBundleFolder);
-            CreatLitEngineFolders("Assets/Resources/Data/");
         }
 
         static void CreatLitEngineFolders(string rootPath)
         {
-            string tconfigfolder = "ConfigData/";
-            string tdllfolder = "LogicDll/";
             string tresfolder = "ResData/";
 
             if (!Directory.Exists(rootPath))
                 Directory.CreateDirectory(rootPath);
 
-            CreatDirectory(rootPath, tconfigfolder);
-            CreatDirectory(rootPath, tdllfolder);
             CreatDirectory(rootPath, tresfolder);
         }
 

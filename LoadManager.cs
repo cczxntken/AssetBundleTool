@@ -273,10 +273,10 @@ namespace LitEngine.LoadAsset
         static public string GetFullPath(string _filename)
         {
             _filename = CombineSuffixName(_filename);
-            string tfullpathname = Path.Combine(sidePath, _filename);
+            string tfullpathname = sidePath + _filename;
             if (!File.Exists(tfullpathname))
             {
-                tfullpathname = Path.Combine(streamPath, _filename);
+                tfullpathname = streamPath + _filename;
             }
 
             return tfullpathname;

@@ -58,8 +58,8 @@ namespace LitEngine.UpdateTool
             else
             {
                 StringBuilder tstrbd = new StringBuilder();
-                tstrbd.AppendLine(string.Format("加载版本文件失败.请检查Resources目录下是否有 {0}.txt 文件", upateMgrData));
-                tstrbd.AppendLine("格式如下:");
+                tstrbd.AppendLine(string.Format("please check the file in Resources. filename:{0}.txt", upateMgrData));
+                tstrbd.AppendLine("format json:");
                 tstrbd.AppendLine("{");
                 tstrbd.AppendLine("\"version\":\"1\",");
                 tstrbd.AppendLine("\"server\":\"http://localhost/Resources/\"");
@@ -159,7 +159,7 @@ namespace LitEngine.UpdateTool
                 Debug.LogError("更新中,请勿重复调用.");
                 return false;
             }
-            if (downLoadGroup == null || downLoadGroup.IsCompleteDownLoad) return false;
+            if (downLoadGroup == null) return false;
             isUpdateing = true;
             downLoadGroup.ReTryAsync();
             StartCoroutine(WaitUpdateDone());
@@ -169,7 +169,7 @@ namespace LitEngine.UpdateTool
         {
             if (isUpdateing)
             {
-                Debug.LogError("更新中,请勿重复调用.");
+                Debug.LogError("Updateing.");
                 return;
             }
             isUpdateing = true;
@@ -196,7 +196,7 @@ namespace LitEngine.UpdateTool
                 tloader.priority = item.priority;
                 tloader.OnComplete += (a) =>
                 {
-                    if (string.IsNullOrEmpty(a.Error))
+                    if (a.IsCompleteDownLoad)
                     {
                         OnUpdateOneComplete(pInfo[a.FileName]);
                     }
@@ -217,7 +217,7 @@ namespace LitEngine.UpdateTool
                 yield return null;
             }
             UpdateProcess();
-            if (string.IsNullOrEmpty(downLoadGroup.Error))
+            if (downLoadGroup.IsCompleteDownLoad)
             {
                 UpdateFileFinished();
             }
@@ -260,7 +260,7 @@ namespace LitEngine.UpdateTool
             if (!curAutoRetry)
             {
                 ByteFileInfoList erroListInfo = GetErroListInfo(downLoadGroup, curInfo);
-                CallUpdateOnComplete(curOnComplete, erroListInfo, downLoadGroup.Error);
+                CallUpdateOnComplete(curOnComplete, erroListInfo,downLoadGroup.Error);
             }
             else
             {
@@ -298,7 +298,7 @@ namespace LitEngine.UpdateTool
                 string tline = UnityEngine.JsonUtility.ToJson(pInfo);
                 List<string> tlines = new List<string>();
                 tlines.Add(tline);
-                string tdedfile = Path.Combine(LoadManager.sidePath, downloadedfile);
+                string tdedfile = CombinePath(LoadManager.sidePath, downloadedfile);
                 File.AppendAllLines(tdedfile, tlines);
             }
             catch (System.Exception erro)
@@ -310,6 +310,7 @@ namespace LitEngine.UpdateTool
 
         #region check
         public delegate void CheckComplete(ByteFileInfoList info, string error);
+        public static bool autoUseCacheCheck = false;
         void ReleaseCheckLoader()
         {
             if (checkLoader == null) return;
@@ -320,7 +321,7 @@ namespace LitEngine.UpdateTool
         {
             if (isChecking || isUpdateing)
             {
-                Debug.LogError("更新流程进行中,请勿重复调用.");
+                Debug.LogError("Checking or Updateing.");
                 return;
             }
             isChecking = true;
@@ -340,7 +341,7 @@ namespace LitEngine.UpdateTool
             string tdicpath = string.Format("{0}/{1}/", updateData.server, updateData.version);
             string tuf = GetServerUrl(LoadManager.byteFileInfoFileName + LoadManager.sSuffixName);
             string tcheckfile = GetCheckFileName();
-            string tfilePath = Path.Combine(LoadManager.sidePath, tcheckfile);
+            string tfilePath = CombinePath(LoadManager.sidePath, tcheckfile);
             if (!useCache || !File.Exists(tfilePath))
             {
                 checkLoader = DownLoadManager.DownLoadFileAsync(tuf, LoadManager.sidePath, tcheckfile, null, 0, null);
@@ -356,9 +357,9 @@ namespace LitEngine.UpdateTool
             }
         }
 
-        IEnumerator WaitRetryCheck(CheckComplete onComplete, bool useCache, bool needRetry)
+        IEnumerator WaitRetryCheck(float dt,CheckComplete onComplete, bool useCache, bool needRetry)
         {
-            yield return new WaitForSeconds(5);
+            yield return new WaitForSeconds(dt);
             CheckUpdate(onComplete, useCache, needRetry);
         }
 
@@ -369,22 +370,39 @@ namespace LitEngine.UpdateTool
             CallCheckOnComplete(onComplete, ret);
         }
 
-        void DownLoadCheckFileFail(CheckComplete onComplete, bool useCache, bool needRetry)
+        void DownLoadCheckFileFail(DownLoader dloader,CheckComplete onComplete, bool useCache, bool needRetry)
         {
             isChecking = false;
-            if (ReTryCheckCount >= ReTryMaxCount)
+            string tfilePath = CombinePath(LoadManager.sidePath, GetCheckFileName());
+            bool isfileExit = File.Exists(tfilePath);
+            if(dloader.IsCompleteDownLoad && isfileExit)
             {
-                needRetry = false;
-            }
-
-            if (needRetry)
-            {
-                ReTryCheckCount++;
-                StartCoroutine(WaitRetryCheck(onComplete, useCache, needRetry));
+                DownLoadCheckFileFinished(onComplete);
             }
             else
             {
-                CallCheckOnComplete(onComplete, null);
+                if (ReTryCheckCount >= ReTryMaxCount)
+                {
+                    needRetry = false;
+                }
+
+                if (needRetry)
+                {
+                    ReTryCheckCount++;
+                    if(autoUseCacheCheck && isfileExit)
+                    {
+                        StartCoroutine(WaitRetryCheck(0.1f,onComplete, true, needRetry));
+                    }
+                    else
+                    {
+                        StartCoroutine(WaitRetryCheck(3,onComplete, useCache, needRetry));
+                    }
+                    
+                }
+                else
+                {
+                    CallCheckOnComplete(onComplete, null);
+                }
             }
         }
 
@@ -397,7 +415,7 @@ namespace LitEngine.UpdateTool
             else
             {
                 Debug.Log(dloader.Error);
-                DownLoadCheckFileFail(onComplete, useCache, needRetry);
+                DownLoadCheckFileFail(dloader,onComplete, useCache, needRetry);
             }
         }
 
@@ -426,7 +444,7 @@ namespace LitEngine.UpdateTool
             var tcmp = new ByteFileInfoList();
             tcmp.AddRange(pList);
 
-            string tdedfile = Path.Combine(LoadManager.sidePath, downloadedfile);
+            string tdedfile = CombinePath(LoadManager.sidePath, downloadedfile);
             var tdedinfo = new ByteFileInfoList(tdedfile);
             var tneedList = tdedinfo.Comparison(tcmp);
 
@@ -448,7 +466,7 @@ namespace LitEngine.UpdateTool
         {
             List<ByteFileInfo> ret = null;
             var tinfo = new ByteFileInfoList();
-            string tfilePath = Path.Combine(LoadManager.sidePath, GetCheckFileName());
+            string tfilePath = CombinePath(LoadManager.sidePath, GetCheckFileName());
 
             if (File.Exists(tfilePath))
             {
@@ -475,8 +493,8 @@ namespace LitEngine.UpdateTool
 
         void UpdateLocalList()
         {
-            string tfilePath = Path.Combine(LoadManager.sidePath, GetCheckFileName());
-            string tsavefile = Path.Combine(LoadManager.sidePath, LoadManager.byteFileInfoFileName + LoadManager.sSuffixName);
+            string tfilePath = CombinePath(LoadManager.sidePath, GetCheckFileName());
+            string tsavefile = CombinePath(LoadManager.sidePath, LoadManager.byteFileInfoFileName + LoadManager.sSuffixName);
 
             if (File.Exists(tfilePath))
             {
@@ -489,7 +507,7 @@ namespace LitEngine.UpdateTool
                 LoadManager.Instance.LoadResInfo();
             }
 
-            string tdedfile = Path.Combine(LoadManager.sidePath, downloadedfile);
+            string tdedfile = CombinePath(LoadManager.sidePath, downloadedfile);
             if (File.Exists(tdedfile))
             {
                 File.Delete(tdedfile);
@@ -508,6 +526,30 @@ namespace LitEngine.UpdateTool
             string assetPath = string.Format("{0}/{1}/{2}/{3}", updateData.server, Application.platform.ToString(), updateData.version,pFile);
 #endif
             return serverUrl + assetPath;
+        }
+        
+        static System.Text.StringBuilder cCombineBuilder = new System.Text.StringBuilder();
+        static public string CombinePath(params string[] paths)
+        {
+            if (paths == null || paths.Length == 0) return null;
+            cCombineBuilder.Clear();
+            for (int i = 0, length = paths.Length; i < length; i++)
+            {
+                bool thavenext = i + 1 < length;
+                string item = paths[i];
+                string next = thavenext ? paths[i + 1] : "";
+                bool thv = item.EndsWith("/");
+                bool tnexthv = !thavenext || next.StartsWith("/");
+
+                cCombineBuilder.Append(item);
+
+                if (!thv && !tnexthv)
+                {
+                    cCombineBuilder.Append("/");
+                }
+            }
+
+            return cCombineBuilder.ToString();
         }
     }
 }

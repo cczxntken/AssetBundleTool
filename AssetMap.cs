@@ -61,7 +61,7 @@ namespace LitEngine.LoadAsset
 
         public AssetObject GetAsset(string pAsset)
         {
-            if (assetMap == null)
+            if (!inited)
             {
                 Init();
             }

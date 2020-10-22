@@ -21,7 +21,7 @@ namespace LitEngine.DownLoad
         public string DestinationPath { get; private set; }//目标路径
         public string SourceURL { get; private set; }//url
         public string TempFile { get; private set; }//下载临时文件名字F ullPath
-        public string TempPath{ get; private set; }//下载临时文件名路径
+        public string TempPath { get; private set; }//下载临时文件名路径
         public string CompleteFile { get; private set; }//下载结束文件 FullPath
         public string FileName { get; private set; }//文件名
         public string Error { get; private set; }//error message
@@ -33,10 +33,10 @@ namespace LitEngine.DownLoad
                 return Mathf.Clamp01(ContentLength > 0 ? (float)DownLoadedLength / ContentLength : 0);
             }
         }
-        
+
         public DownloadState State { get; private set; }
-        public bool IsDone { get;private set;}//下载线程完成
-        public bool IsCompleteDownLoad { get { return IsDone && Error == null; } } //成功下载
+        public bool IsDone { get; private set; }//下载线程完成
+        public bool IsCompleteDownLoad { get; private set;} //成功下载
 
         public string MD5String { get; private set; }
         public long ContentLength { get; private set; }//需要下载的长度
@@ -51,10 +51,10 @@ namespace LitEngine.DownLoad
         private WebResponse mResponse;
         private Stream mHttpStream;
 
-        
+
         #endregion
         #region 构造析构
-        public DownLoader(string pSourceurl, string pDestination,string pFileName = null,string pMD5 = null,long pLength = 0, bool pClear = true)
+        public DownLoader(string pSourceurl, string pDestination, string pFileName = null, string pMD5 = null, long pLength = 0, bool pClear = true)
         {
             Key = pSourceurl;
             SourceURL = pSourceurl;
@@ -105,9 +105,16 @@ namespace LitEngine.DownLoad
 
         public void Stop()
         {
-            IsDone = true;
+            if (IsCompleteDownLoad) return;
             mThreadRuning = false;
             CloseHttpClient();
+            if (task != null)
+            {
+                task.Wait();
+                task = null;
+            }
+            IsDone = true;
+            State = DownloadState.finished;
         }
         #endregion
 
@@ -119,6 +126,7 @@ namespace LitEngine.DownLoad
             Error = null;
         }
 
+        Task task = null;
         public void StartAsync()
         {
             if (State != DownloadState.normal) return;
@@ -127,13 +135,14 @@ namespace LitEngine.DownLoad
             IsDone = false;
             Error = null;
             OnStart?.Invoke(this);
-            Task.Run((System.Action)ReadNetByte);
+            task = Task.Run((System.Action)ReadNetByte);
         }
 
         private void ReadNetByte()
         {
-            float tdownloadSize = 0;
-            float tneedDownLoadSize = 0;
+            Error = string.Format("[URL] = {0},[Error] = Can not completed.Stream erro.", SourceURL);
+            long tdownloadSize = 0;
+            long tneedDownLoadSize = 0;
             FileStream ttempfile = null;
             try
             {
@@ -142,7 +151,7 @@ namespace LitEngine.DownLoad
                 {
                     Directory.CreateDirectory(TempPath);
                 }
-                if(!Directory.Exists(DestinationPath))
+                if (!Directory.Exists(DestinationPath))
                 {
                     Directory.CreateDirectory(DestinationPath);
                 }
@@ -193,25 +202,25 @@ namespace LitEngine.DownLoad
 
                 if (mResponse == null || rspError != null)
                 {
-                    string terro = string.Format("ReadNetByte 获取Response失败.[Error] = {0}", rspError);
+                    string terro = string.Format("ReadNetByte Get Response fail.[Error] = {0}", rspError);
                     throw new System.NullReferenceException(terro);
                 }
 
                 mHttpStream = mResponse.GetResponseStream();
                 tneedDownLoadSize = mResponse.ContentLength;
-                
+
                 DownLoadedLength = thaveindex;
-                if(isClearDownload)
+                if (isClearDownload)
                 {
-                    ContentLength = mResponse.ContentLength;
-                }    
+                    ContentLength = tneedDownLoadSize;
+                }
 
                 if (ttempfile == null)
                 {
                     ttempfile = System.IO.File.Create(TempFile);
                 }
-                
-               
+
+
                 int tcount = 0;
                 int tlen = 1024;
                 byte[] tbuffer = new byte[tlen];
@@ -247,13 +256,37 @@ namespace LitEngine.DownLoad
             {
                 if (tdownloadSize == tneedDownLoadSize)
                 {
-                    if (File.Exists(TempFile))
+                    DownLoadComplete();
+                }
+                else
+                {
+                    if (string.IsNullOrEmpty(Error))
                     {
-                        if (File.Exists(CompleteFile))
-                        {
-                            File.Delete(CompleteFile);
-                        }
+                        Error = string.Format("[URL] = {0},[Error] = Can not completed.Stream erro.", SourceURL);
+                    }
+                }
+            }
+            catch (System.Exception erro)
+            {
+                Error = string.Format("[URL] = {0},[Error] = {1}", SourceURL, erro.Message);
+            }
 
+            FinishedThread();
+        }
+
+        void DownLoadComplete()
+        {
+            if (File.Exists(TempFile))
+            {
+                if (File.Exists(CompleteFile))
+                {
+                    File.Delete(CompleteFile);
+                }
+
+                try
+                {
+                    if (CheckMD5())
+                    {
                         int tindex = CompleteFile.LastIndexOf('/');
                         string tcompletePagth = CompleteFile.Substring(0, tindex);
 
@@ -262,23 +295,27 @@ namespace LitEngine.DownLoad
                             Directory.CreateDirectory(tcompletePagth);
                         }
                         File.Move(TempFile, CompleteFile);
+                        IsCompleteDownLoad = true;
+                        Error = null;
                     }
-                }
-                else
-                {
-                    if (Error == null)
+                    else
                     {
-                        Error = string.Format("[URL] = {0},[Error] = 文件未能完成下载.Stream 被中断.", SourceURL);
+                        File.Delete(TempFile);
+                        Error = string.Format("[URL] = {0},[Error] = Check MD5 fail.MD5 = {1},tempMd5 = {2}", SourceURL, MD5String, tempMD5);
                     }
-                        
+                }
+                catch (System.Exception error)
+                {
+                    Error = string.Format("[URL] = {0},[Error] = Check MD5 fail.MD5 = {1},error = {2}", SourceURL, MD5String, error.Message);
                 }
             }
-            catch (System.Exception erro)
+            else
             {
-                Error = string.Format("[URL] = {0},[Error] = {1}", SourceURL, erro.Message);
+                if (string.IsNullOrEmpty(Error))
+                {
+                    Error = string.Format("[URL] = {0},[Error] = file Can not found .MD5 = {1},tempfile = {2}", SourceURL, MD5String, TempFile);
+                }
             }
-
-            FinishedThread();  
         }
 
         private void FinishedThread()
@@ -293,39 +330,80 @@ namespace LitEngine.DownLoad
         }
         private void CloseHttpClient()
         {
-            if (mHttpStream != null)
-            {
-                mHttpStream.Close();
-                mHttpStream = null;
-            }
-
-            if (mResponse != null)
-            {
-                mResponse.Close();
-                mResponse = null;
-            }
-
-            if (mReqest != null)
-            {
-                mReqest.Abort();
-                mReqest = null;
-            }
-        }
-    
-
-        void CallComplete()
-        {
-            if(IsDone) return;
-            IsDone = true;
             try
             {
-                 OnComplete?.Invoke(this);
+                if (mHttpStream != null)
+                {
+                    mHttpStream.Close();
+                    mHttpStream = null;
+                }
+
+                if (mResponse != null)
+                {
+                    mResponse.Close();
+                    mResponse = null;
+                }
+
+                if (mReqest != null)
+                {
+                    mReqest.Abort();
+                    mReqest = null;
+                }
+            }
+            catch (System.Exception erro)
+            {
+                Debug.LogError(string.Format("[URL] = {0},[Error] = {1}", SourceURL, erro.Message));
+            }
+
+        }
+        string tempMD5 = null;
+        bool CheckMD5()
+        {
+            if (string.IsNullOrEmpty(MD5String)) return true;
+            tempMD5 = GetMD5File(TempFile);
+            return MD5String.Equals(tempMD5);
+        }
+
+        public static string GetMD5File(string file)
+        {
+            try
+            {
+                FileStream fs = new FileStream(file, FileMode.Open);
+                System.Security.Cryptography.MD5 md5 = new System.Security.Cryptography.MD5CryptoServiceProvider();
+                byte[] retVal = md5.ComputeHash(fs);
+                fs.Close();
+
+                System.Text.StringBuilder sb = new System.Text.StringBuilder();
+                for (int i = 0; i < retVal.Length; i++)
+                {
+                    sb.Append(retVal[i].ToString("x2"));
+                }
+                return sb.ToString();
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError("md5file() fail, error:" + ex.Message);
+            }
+            return null;
+        }
+
+        public void CallComplete()
+        {
+            if (!IsDone) return;
+            try
+            {
+                var tcomplete = OnComplete;
+                tcomplete?.Invoke(this);
             }
             catch (System.Exception e)
             {
-                Debug.LogErrorFormat("DownLoader->CallComplete 出现错误.Url = {0},erro = {1}",SourceURL,e.ToString());
+                Debug.LogErrorFormat("DownLoader->CallComplete error.Url = {0},erro = {1}", SourceURL, e.ToString());
             }
-           
+        }
+        void OnDone()
+        {
+            if (IsDone) return;
+            IsDone = true;
         }
         public void Update()
         {
@@ -339,7 +417,7 @@ namespace LitEngine.DownLoad
                     break;
                 case DownloadState.finished:
                     {
-                        CallComplete();
+                        OnDone();
                     }
                     break;
                 default:

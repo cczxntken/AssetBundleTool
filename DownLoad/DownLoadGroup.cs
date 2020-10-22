@@ -21,7 +21,7 @@ namespace LitEngine.DownLoad
         public float Progress { get; private set; }
 
         public bool IsDone { get; private set; }
-        public bool IsCompleteDownLoad { get { return IsDone && Error == null; } } //成功下载
+        public bool IsCompleteDownLoad { get; private set; } //成功下载
         public DownloadState State { get; private set; }
         public string Key { get; private set; }
         public string Error { get; private set; }
@@ -33,6 +33,7 @@ namespace LitEngine.DownLoad
             State = DownloadState.normal;
             Error = null;
             ContentLength = 0;
+            IsCompleteDownLoad = false;
         }
         ~DownLoadGroup()
         {
@@ -71,25 +72,27 @@ namespace LitEngine.DownLoad
 
         public void Stop()
         {
+            if(IsCompleteDownLoad) return;
             for (int i = 0; i < groupList.Count; i++)
             {
                 groupList[i].Stop();
             }
-            Error = "下载中断.";
+            Error = "download stop.";
             IsDone = true;
             State = DownloadState.finished;
+            DownLoadManager.RefList();
         }
         #endregion
 
-        public DownLoader AddByUrl(string pSourceurl, string pDestination, string pFileName,string pMD5, long pLength, bool pClear)
+        public DownLoader AddByUrl(string pSourceurl, string pDestination, string pFileName, string pMD5, long pLength, bool pClear)
         {
             if (State != DownloadState.normal)
             {
-                Debug.LogError("已经开始的任务不可插入新内容.");
+                Debug.LogError("the group is downloading.");
                 return null;
             }
             if (IsHaveURL(pSourceurl)) return null;
-            DownLoader ret = new DownLoader(pSourceurl, pDestination,pFileName, pMD5, pLength, pClear);
+            DownLoader ret = new DownLoader(pSourceurl, pDestination, pFileName, pMD5, pLength, pClear);
             Add(ret);
             return ret;
         }
@@ -120,7 +123,7 @@ namespace LitEngine.DownLoad
             {
                 if (!groupList[i].IsCompleteDownLoad)
                 {
-                    DownLoadManager.DownLoadFileAsync(groupList[i],null,null);
+                    DownLoadManager.DownLoadFileAsync(groupList[i], null, null);
                 }
                 ContentLength += groupList[i].ContentLength;
             }
@@ -140,21 +143,21 @@ namespace LitEngine.DownLoad
                 {
                     groupList[i].RestState();
                 }
-                    
+
             }
             if (groupList.Count > 0)
                 StartAsync();
         }
 
-        public Dictionary<string,string> GetNotCompletFileNameTable()
+        public Dictionary<string, string> GetNotCompletFileNameTable()
         {
-            Dictionary<string,string> ret = new Dictionary<string,string>();
+            Dictionary<string, string> ret = new Dictionary<string, string>();
             for (int i = groupList.Count - 1; i >= 0; i--)
             {
                 if (!groupList[i].IsCompleteDownLoad)
                 {
-                    ret.Add(groupList[i].FileName,groupList[i].SourceURL);
-                }     
+                    ret.Add(groupList[i].FileName, groupList[i].SourceURL);
+                }
             }
 
             return ret;
@@ -163,7 +166,7 @@ namespace LitEngine.DownLoad
 
         bool UpdateChild()
         {
-            if(groupList.Count == 0) return true;
+            if (groupList.Count == 0) return true;
             bool isAllDone = true;
             DownLoadedLength = 0;
             Progress = 0;
@@ -192,23 +195,27 @@ namespace LitEngine.DownLoad
             if (IsDone) return;
             IsDone = true;
 
+            bool tisCompleteGroup = true;
             StringBuilder terrostr = new StringBuilder();
             for (int i = 0; i < groupList.Count; i++)
             {
-                if (groupList[i].Error != null)
+                if (!groupList[i].IsCompleteDownLoad)
                 {
-                    terrostr.AppendLine(groupList[i].Error);
+                    tisCompleteGroup = false;
+                    terrostr.AppendLine(string.Format("Group- URL={0},Error={1}", groupList[i].SourceURL, groupList[i].Error));
                 }
             }
-
+            IsCompleteDownLoad = tisCompleteGroup;
             Error = terrostr.ToString();
 
-            var tfinished = onComplete;
-
+        }
+        public void CallComplete()
+        {
+            if (!IsDone) return;
             try
             {
-                if (tfinished != null)
-                    tfinished(this);
+                var tfinished = onComplete;
+                tfinished?.Invoke(this);
             }
             catch (System.Exception _error)
             {

@@ -82,7 +82,7 @@ namespace LitEngine.DownLoad
             DownLoader ret = null;
             if (Instance.sDownLoadMap.ContainsKey(sourceurl))
             {
-                Debug.LogWarning("为正在下载的文件添加回调.url = " + sourceurl);
+                Debug.LogWarning("the file is downloading.url = " + sourceurl);
                 ret = (DownLoader)Instance.sDownLoadMap[sourceurl];
             }
             else
@@ -167,6 +167,11 @@ namespace LitEngine.DownLoad
             }
         }
 
+        static public void RefList()
+        {
+            Instance.Update();
+        }
+
         private void Update()
         {
             UpdateLoader();
@@ -189,6 +194,7 @@ namespace LitEngine.DownLoad
                 if (item.IsDone)
                 {
                     Remove(item.Key);
+                    item.CallComplete();
                 }
             }
         }
@@ -202,10 +208,17 @@ namespace LitEngine.DownLoad
                 for (int i = 0; i < tneed; i++)
                 {
                     IDownLoad item = (IDownLoad)sWaitDownLoad[0];
-                    sWaitDownLoad.RemoveAt(0);
-                    sDownLoading.Add(item);
-                    item.StartAsync();
-
+                    
+                    if (!item.IsDone)
+                    {
+                        sWaitDownLoad.RemoveAt(0);
+                        sDownLoading.Add(item);
+                        item.StartAsync();
+                    }
+                    else
+                    {
+                        Remove(item.Key);
+                    }
                     if (sWaitDownLoad.Count == 0)
                     {
                         break;
@@ -227,6 +240,7 @@ namespace LitEngine.DownLoad
                 if (item.IsDone)
                 {
                     RemoveGroup(tkey);
+                    item.CallComplete();
                 }
             }
         }

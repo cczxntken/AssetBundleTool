@@ -125,7 +125,7 @@ namespace LitEngine.UpdateTool
             }
             else
             {
-                updateType = UpdateType.fail;
+                updateType = UpdateType.pause;
             }
             AutoUpdate = true;
             return istart;
@@ -160,7 +160,7 @@ namespace LitEngine.UpdateTool
             }
             else
             {
-                Debug.LogError("更新列表不能为空.");
+                Debug.LogError("list can not be null.");
             }
 
         }
@@ -228,7 +228,8 @@ namespace LitEngine.UpdateTool
         void CaseFail()
         {
             checkType = CheckType.checking;
-            UpdateManager.CheckUpdate(OnCheckComplete, false, true);
+            UpdateManager.autoUseCacheCheck = true;
+            UpdateManager.CheckUpdate(OnCheckComplete, true, true);
         }
         void CaseNeedUpdate()
         {

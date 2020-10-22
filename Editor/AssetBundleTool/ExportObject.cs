@@ -49,6 +49,14 @@ namespace LitEngineEditor
                 ExportAllBundleFullPath(sBuildTarget[ExportSetting.Instance.sSelectedPlatm]);
             }
 
+            if (GUILayout.Button("Creat Infos"))
+            {
+                var ttar = sBuildTarget[ExportSetting.Instance.sSelectedPlatm];
+                string tpath = GetExportPath(ttar);
+                BuildByteFileInfoFile(tpath,tpath,ttar);
+                AssetDatabase.Refresh();
+            }
+
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("Move Assets to SidePath"))
             {
@@ -284,18 +292,21 @@ namespace LitEngineEditor
             if (!Directory.Exists(_desPath))
                 Directory.CreateDirectory(_desPath);
             DeleteAllFile(_desPath);
-            _socPath = _socPath.Replace("//","/");
+            _desPath = GetFormatPath(_desPath);
+            _socPath = GetFormatPath(_socPath);
+            string appPath = GetFormatPath(System.IO.Directory.GetCurrentDirectory());
+
             DirectoryInfo tdirfolder = new DirectoryInfo(_socPath);
 
             FileInfo[] tfileinfos = tdirfolder.GetFiles("*" + sSuffixName, System.IO.SearchOption.AllDirectories);
-            for(int i = 0,tmax = tfileinfos.Length;i < tmax;i++)
+            for (int i = 0, tmax = tfileinfos.Length; i < tmax; i++)
             {
                 FileInfo tfile = tfileinfos[i];
-                string tresPath = tfile.FullName.Replace("//","/");
+                string tresPath = GetFormatPath(tfile.FullName).Replace(appPath, "");
                 int tindex = tresPath.IndexOf(_socPath) + _socPath.Length;
                 tresPath = tresPath.Substring(tindex, tresPath.Length - tindex);
-               
-                string dicPath = (_desPath + "/" + tresPath.Replace(tfile.Name,"")).Replace("//","/");
+
+                string dicPath = (_desPath + "/" + tresPath.Replace(tfile.Name,""));
 
                 if (!Directory.Exists(dicPath))
                     Directory.CreateDirectory(dicPath);
@@ -355,18 +366,33 @@ namespace LitEngineEditor
         #region fileinfo
         static public void BuildByteFileInfoFile(string pSocPath, string pDesPath, BuildTarget _target)
         {
-            pSocPath = pSocPath.Replace("//", "/");
+            string txtbytefile = pSocPath + sByteFileInfo + sSuffixName;
+            if(File.Exists(txtbytefile))
+            {
+                File.Delete(txtbytefile);
+            }
+            string tmainfdest = txtbytefile + ".manifest";
+            if(File.Exists(tmainfdest))
+            {
+                File.Delete(tmainfdest);
+            }
+
+            pSocPath = GetFormatPath(pSocPath);
             DirectoryInfo tdirfolder = new DirectoryInfo(pSocPath);
 
             FileInfo[] tfileinfos = tdirfolder.GetFiles("*" + sSuffixName, System.IO.SearchOption.AllDirectories);
 
             List<ByteFileInfo> byteFileInfoList = new List<ByteFileInfo>();
             string appmainfest = "AppManifest" + sSuffixName;
+            string appPath = GetFormatPath(System.IO.Directory.GetCurrentDirectory());
             for (int i = 0, tmax = tfileinfos.Length; i < tmax; i++)
             {
                 FileInfo tfile = tfileinfos[i];
-                string tresPath = tfile.FullName.Replace("//", "/");
-                int tindex = tresPath.IndexOf(pSocPath) + pSocPath.Length;
+
+                string tresPath = GetFormatPath(tfile.FullName).Replace(appPath,"");
+                string trpstr = pSocPath;
+
+                int tindex = tresPath.IndexOf(trpstr) + trpstr.Length;
                 tresPath = tresPath.Substring(tindex, tresPath.Length - tindex);
 
                 ByteFileInfo tbyteinfo = CreatByteFileInfo(tfile, tresPath);
@@ -454,6 +480,11 @@ namespace LitEngineEditor
                 Debug.LogError("md5file() fail, error:" + ex.Message);
             }
             return null;
+        }
+
+        public static string GetFormatPath(string pPath)
+        {
+            return string.Join("/", pPath.Replace("\\", "/").Split('/'));
         }
         #endregion
 
