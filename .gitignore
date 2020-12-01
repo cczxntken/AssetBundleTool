@@ -3597,3 +3597,5 @@ Tool/Temp/UnityTempFile-1ef211009806e465da664b8437f2fffa
 Tool/Temp/UnityTempFile-5022ac3474fe94bffb5ac1c420c4ccfd
 Tool/NewAssembly.csproj
 Tool/LitEngine.csproj
+Tool/obj
+Tool/obj/Debug/LitEngine.csprojAssemblyReference.cache

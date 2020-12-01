@@ -51,7 +51,7 @@ namespace LitEngine
         }
         #endregion
         #region Net基类
-        public class NetBase : MonoBehaviour
+        public abstract class NetBase : MonoBehaviour
         {
             #region socket属性
             public enum IPTYPE
@@ -73,6 +73,7 @@ namespace LitEngine
             protected int mSendTimeout = 0;
             protected int mReceiveBufferSize = 1024 * 8;
             protected int mSendBufferSize = 1024 * 8;
+            protected bool socketNoDelay = true;
 
             protected string mNetTag = "";
             public bool StopUpdateRecMsg { get; set; }
@@ -87,7 +88,7 @@ namespace LitEngine
             protected System.Collections.Queue mResultDataList = System.Collections.Queue.Synchronized(new System.Collections.Queue());//已接收的消息队列             
             #endregion
             #region 分发
-            static public int OneFixedUpdateChoseCount = 5;
+            static public int OneFixedUpdateChoseCount = 60;
             protected SafeMap<int, SafeList<System.Action<ReceiveData>>> mMsgHandlerList = new SafeMap<int, SafeList<System.Action<ReceiveData>>>();//消息注册列表
             protected SafeQueue<MSG_RECALL_DATA> mToMainThreadMsgList = new SafeQueue<MSG_RECALL_DATA>();//给主线程发送通知
             #endregion
@@ -132,7 +133,7 @@ namespace LitEngine
                     return;
                 MessageDelgate = null;
                 mMsgHandlerList.Clear();
-                DisConnect();
+                _DisConnect();
                 mState = TcpState.Disposed;
             }
 
@@ -170,19 +171,20 @@ namespace LitEngine
             {
 
             }
-            virtual public void SetTimerOutAndBuffSize(int _rec, int _send, int _recsize, int _sendsize)
+            virtual public void SetTimerOutAndBuffSize(int _rec, int _send, int _recsize, int _sendsize,bool pNoDelay = true)
             {
                 mRecTimeOut = _rec;
                 mSendTimeout = _send;
                 mReceiveBufferSize = _recsize;
                 mSendBufferSize = _sendsize;
+                socketNoDelay = pNoDelay;
                 RestSocketInfo();
             }
 
             virtual protected void RestSocketInfo()
             {
                 if (mSocket == null) return;
-                mSocket.NoDelay = true;
+                mSocket.NoDelay = socketNoDelay;
                 mSocket.ReceiveTimeout = mRecTimeOut;
                 mSocket.SendTimeout = mSendTimeout;
                 mSocket.ReceiveBufferSize = mReceiveBufferSize;
@@ -282,18 +284,13 @@ namespace LitEngine
             {
                 ClearQueue();
             }
-            virtual public void DisConnect()
+            virtual public void _DisConnect()
             {
                 if (IsCOrD())
                     return;
                 CloseSocketStart();  
             }
-            virtual public void ClearMsgHandler()
-            {
-                mSendDataList.Clear();
-                mResultDataList.Clear();
-                mMsgHandlerList.Clear();
-            }
+
             #endregion
 
             #region 通知类
@@ -314,7 +311,7 @@ namespace LitEngine
 
             #region 消息注册与分发
 
-            virtual public void Reg(int msgid, System.Action<ReceiveData> func)
+            virtual public void _Reg(int msgid, System.Action<ReceiveData> func)
             {
                 SafeList<System.Action<ReceiveData>> tlist = null;
                 if (mMsgHandlerList.ContainsKey(msgid))
@@ -329,7 +326,7 @@ namespace LitEngine
                 if (!tlist.Contains(func))
                     tlist.Add(func);
             }
-            virtual public void UnReg(int msgid, System.Action<ReceiveData> func)
+            virtual public void _UnReg(int msgid, System.Action<ReceiveData> func)
             {
                 if (!mMsgHandlerList.ContainsKey(msgid)) return;
                 SafeList<System.Action<ReceiveData>> tlist = mMsgHandlerList[msgid];
@@ -341,19 +338,24 @@ namespace LitEngine
 
             virtual public void Call(int _msgid, ReceiveData _msg)
             {
-                try {
+#if LITDEBUG
+                try
+                {
+#endif
                     if (mMsgHandlerList.ContainsKey(_msgid))
                     {
                         SafeList<System.Action<ReceiveData>> tlist = mMsgHandlerList[_msgid];
                         int tlen = tlist.Count;
-                        for (int i = tlen -1 ; i >= 0; i--)
+                        for (int i = tlen - 1; i >= 0; i--)
                             tlist[i](_msg);
                     }
+#if LITDEBUG
                 }
                 catch (Exception _error)
                 {
-                    DLog.LogError( _error.ToString());
+                    DLog.LogError(_error.ToString());
                 }
+#endif
             }
 
             #endregion

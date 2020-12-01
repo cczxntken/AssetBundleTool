@@ -11,6 +11,7 @@ namespace LitEngine
         public class UDPNet : NetBase
         {
             #region socket属性
+            static public bool IsPushPackage = false;
             static private UDPNet sInstance = null;
             protected IPEndPoint mTargetPoint;//目标地址
             protected EndPoint mRecPoint;
@@ -24,7 +25,7 @@ namespace LitEngine
             protected int mLocalPort = 10186;
             #region 构造析构
 
-            static public UDPNet Instance
+            static private UDPNet Instance
             {
                 get
                 {
@@ -39,7 +40,7 @@ namespace LitEngine
                 }
             }
 
-            public UDPNet():base()
+            private UDPNet():base()
             {
                 mNetTag = "UDPAsync";
             }
@@ -64,6 +65,59 @@ namespace LitEngine
                 {
                     mTargetPoint = value;
                 }
+            }
+            #endregion
+
+            #region static
+            static public void DisposeNet()
+            {
+                if(Instance == null) return;
+                Instance.Dispose();
+            }
+            
+            static public void DisConnect()
+            {
+                if(Instance == null) return;
+                Instance._DisConnect();
+            }
+
+            static public void ClearNetBuffer()
+            {
+                if(Instance == null) return;
+                Instance.ClearBuffer();
+            }
+
+            static public void ClearMsgHandler()
+            {
+                Instance.mMsgHandlerList.Clear();
+            }
+            static public void Init(string _hostname, int _port)
+            {
+                Instance.InitSocket(_hostname,_port);
+            }
+
+            static public void Connect()
+            {
+                Instance.ConnectToServer();
+            }
+
+            static public void SetSocketTime(int _rec, int _send, int _recsize, int _sendsize,bool pNoDelay)
+            {
+                Instance.SetTimerOutAndBuffSize(_rec,_send,_recsize,_sendsize,pNoDelay);
+            }
+
+            static public void Add(SendData _data)
+            {
+                Instance.AddSend(_data);
+            }
+            static public void Reg(int msgid, System.Action<ReceiveData> func)
+            {
+                Instance._Reg(msgid,func);
+            }
+
+            static public void UnReg(int msgid, System.Action<ReceiveData> func)
+            {
+                Instance._UnReg(msgid,func);
             }
             #endregion
 
@@ -131,6 +185,11 @@ namespace LitEngine
             #region 发送  
             override public void AddSend(SendData _data)
             {
+                if(_data == null)
+                {
+                    DLog.LogError( "试图添加一个空对象到发送队列!AddSend");
+                    return;
+                }
                 if (!mStartThread) return;
                 mSendDataList.Enqueue(_data);
             }
@@ -140,7 +199,6 @@ namespace LitEngine
             {
                 while (mStartThread)
                 {
-                    Thread.Sleep(2);
                     try
                     {
                         if (mSendDataList.Count == 0)
@@ -151,7 +209,6 @@ namespace LitEngine
                     {
                         DLog.LogError(mNetTag + e.ToString());
                     }
-
                 }
             }
 
@@ -198,10 +255,22 @@ namespace LitEngine
             {
                 try
                 {
-                    base.Processingdata(_len, _buffer);
-                    if (_len < SocketDataBase.mPackageTopLen) return;
-                    ReceiveData tssdata = new ReceiveData(_buffer, 0);
-                    Call(tssdata.Cmd, tssdata);
+                    DebugMsg(-1, _buffer, 0, _len, "接收-bytes");
+                    if (!IsPushPackage)
+                    {
+                        ReceiveData tssdata = new ReceiveData(_buffer, 0);
+                        mResultDataList.Enqueue(tssdata);
+                    }
+                    else
+                    {
+                        mBufferData.Push(_buffer, _len);
+                        while (mBufferData.IsFullData())
+                        {
+                            ReceiveData tssdata = mBufferData.GetReceiveData();
+                            mResultDataList.Enqueue(tssdata);
+                            DebugMsg(tssdata.Cmd, tssdata.Data, 0, tssdata.Len, "接收-ReceiveData");
+                        }
+                    }
                 }
                 catch (Exception e)
                 {
@@ -211,6 +280,11 @@ namespace LitEngine
             }
             #endregion
 
+            protected void Update()
+            {
+                UpdateReCalledMsg();
+                UpdateRecMsg();
+            }
             #endregion
         }
     }
