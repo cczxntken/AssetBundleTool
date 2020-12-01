@@ -11,8 +11,19 @@ namespace LitEngineEditor
         [UnityEditor.MenuItem("Export/IOS生成资源表及资源")]
         static public void BuildIOSAssetProcess()
         {
+            BuildAndroidAssetProcess(1);
+        }
+
+        [UnityEditor.MenuItem("Export/Android生成资源表及资源")]
+        static public void BuildAndroidAssetProcess()
+        {
+            BuildAndroidAssetProcess(0);
+        }
+
+        static public void BuildAndroidAssetProcess(int platm)
+        {
             CreatModelAsset();
-            ExportSetting.Instance.sSelectedPlatm = 1;
+            ExportSetting.Instance.sSelectedPlatm = platm;
             ExportSetting.Instance.sCompressed = 0;
             ExportSetting.Instance.sBuildType = 1;
             ExportObject.ExportAllBundleFullPath(ExportObject.sBuildTarget[ExportSetting.Instance.sSelectedPlatm]);

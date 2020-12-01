@@ -13,6 +13,8 @@ namespace LitEngine.UpdateTool
         public const string checkfile = "checkInfoData.txt";
         public const string downloadedfile = "downloadedData.txt";
         public const string upateMgrData = "jsonData/updateData";
+
+        public static System.Func<string> ServerUrlDelagate = null;
         private static object lockobj = new object();
         private static UpdateManager sInstance = null;
         private static UpdateManager Instance
@@ -517,7 +519,7 @@ namespace LitEngine.UpdateTool
 
         public string GetServerUrl(string pFile)
         {
-            string serverUrl = S3SendClient.GetHTTPPATH();
+            string serverUrl = ServerUrlDelagate != null ? ServerUrlDelagate.Invoke() : "";
 #if UNITY_IOS
             string assetPath = string.Format("{0}/{1}/{2}/{3}", updateData.server, "ios", updateData.version,pFile);
 #elif UNITY_ANDROID
