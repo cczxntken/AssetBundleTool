@@ -1,3 +1,4 @@
+Tool/Temp
 Tool/Temp/UnityLockfile
 Tool/Temp/UnityTempFile-0ef6ef5225b9249889942b9f78afcfcd
 Tool/Temp/UnityTempFile-1d9a8e315719545748665a4a949dd580
@@ -13,6 +14,7 @@ Tool/Temp/UnityTempFile-47356fd41ea3a49b7b7bd06b963fe92d
 Tool/Temp/UnityTempFile-695554633c5fc4cb6bd4a186a489cb41
 Tool/Temp/UnityTempFile-a0f8222b68a764d9ea4bd2e1318d464a
 Tool/Temp/UnityTempFile-f98bab5aff1004c25bf478620b4777b1
+Tool/Library
 Tool/Library/AnnotationManager
 Tool/Library/ArtifactDB
 Tool/Library/ArtifactDB-lock
@@ -3586,3 +3588,10 @@ Tool/Packages/packages-lock.json
 Tool/Assembly-CSharp-Editor.csproj
 Tool/Assembly-CSharp.csproj
 Tool/Tool.sln
+Tool/Library/Artifacts/6f/6f687d7cab38e2c648a0c518450eb7f7
+Tool/Library/Artifacts/7b/7b4fdd0b79c7444ec9d4eb619c904449
+Tool/Library/Artifacts/c5/c596e4c21ab80641e10f487c2b5cc6b9
+Tool/Library/Artifacts/cc/ccb71ef9959b1e47161eab47b05dc547
+Tool/Library/Artifacts/d0/d01061c4bf94b1c4acbc310851c190f0
+Tool/Temp/UnityTempFile-1ef211009806e465da664b8437f2fffa
+Tool/Temp/UnityTempFile-5022ac3474fe94bffb5ac1c420c4ccfd
