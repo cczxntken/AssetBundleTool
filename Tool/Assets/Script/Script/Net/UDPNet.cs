@@ -4,133 +4,40 @@ using System.Net;
 using System;
 using System.Collections;
 using System.Threading;
-namespace LitEngine
+using LitEngine.UpdateSpace;
+namespace LitEngine.Net
 {
-    namespace NetTool
+    public class UDPNet : NetBase<UDPNet>
     {
-        public class UDPNet : NetBase
+        #region socket属性
+        static public bool IsPushPackage = false;
+        protected IPEndPoint mTargetPoint;//目标地址
+        protected EndPoint mRecPoint;
+        protected IPAddress mServerIP;
+        protected int mLocalPort = 30379;
+        protected AsyncCallback sendCallBack;
+        #endregion
+
+        #region 构造析构
+
+        private UDPNet() : base()
         {
-            #region socket属性
-            static public bool IsPushPackage = false;
-            static private UDPNet sInstance = null;
-            protected IPEndPoint mTargetPoint;//目标地址
-            protected EndPoint mRecPoint;
-            protected string mServerIP;
+            mNetTag = "UDP";
+            sendCallBack = SendAsyncCallback;
+        }
+        #endregion
 
-            protected SendData mNowSendData;
-            protected bool mSendFinished = true;
-            protected bool mSended = false;
-            protected bool mStartRec = false;
-            #endregion
-            protected int mLocalPort = 10186;
-            #region 构造析构
-
-            static private UDPNet Instance
+        #region 建立Socket
+        override public void ConnectToServer()
+        {
+            try
             {
-                get
-                {
-                    if (sInstance == null)
-                    {
-                        GameObject tobj = new GameObject();
-                        DontDestroyOnLoad(tobj);
-                        sInstance = tobj.AddComponent<UDPNet>();
-                        tobj.name = sInstance.mNetTag + "-Object";
-                    }
-                    return sInstance;
-                }
-            }
-
-            private UDPNet():base()
-            {
-                mNetTag = "UDPAsync";
-            }
-            override protected void OnDestroy()
-            {
-                sInstance = null;
-                base.OnDestroy();
-            }
-            #endregion
-
-            #region 属性
-
-
-            public IPEndPoint TargetPoint
-            {
-                get
-                {
-                    return mTargetPoint;
-                }
-
-                set
-                {
-                    mTargetPoint = value;
-                }
-            }
-            #endregion
-
-            #region static
-            static public void DisposeNet()
-            {
-                if(Instance == null) return;
-                Instance.Dispose();
-            }
-            
-            static public void DisConnect()
-            {
-                if(Instance == null) return;
-                Instance._DisConnect();
-            }
-
-            static public void ClearNetBuffer()
-            {
-                if(Instance == null) return;
-                Instance.ClearBuffer();
-            }
-
-            static public void ClearMsgHandler()
-            {
-                Instance.mMsgHandlerList.Clear();
-            }
-            static public void Init(string _hostname, int _port)
-            {
-                Instance.InitSocket(_hostname,_port);
-            }
-
-            static public void Connect()
-            {
-                Instance.ConnectToServer();
-            }
-
-            static public void SetSocketTime(int _rec, int _send, int _recsize, int _sendsize,bool pNoDelay)
-            {
-                Instance.SetTimerOutAndBuffSize(_rec,_send,_recsize,_sendsize,pNoDelay);
-            }
-
-            static public void Add(SendData _data)
-            {
-                Instance.AddSend(_data);
-            }
-            static public void Reg(int msgid, System.Action<ReceiveData> func)
-            {
-                Instance._Reg(msgid,func);
-            }
-
-            static public void UnReg(int msgid, System.Action<ReceiveData> func)
-            {
-                Instance._UnReg(msgid,func);
-            }
-            #endregion
-
-            #region 建立Socket
-            override public void ConnectToServer()
-            {
-                // GameUpdateManager.Instance().RegUpdate(mUpdateDelgate);
-                IPAddress[] ips = Dns.GetHostAddresses(mHostName);
-                mServerIP = ips[0].ToString();
-                mSocket = new Socket(IPAddress.Parse(mServerIP).AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-                mTargetPoint = new IPEndPoint(IPAddress.Parse(mServerIP),mPort);
-                mStartThread = true;
-
+                var ips = GetServerIpAddress(mHostName);
+                mServerIP = ips[0];
+                mSocket = new Socket(mServerIP.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+                mTargetPoint = new IPEndPoint(mServerIP, mPort);
+                mRecPoint = new IPEndPoint(mServerIP, mPort);
+                
                 int tempport = mLocalPort;
                 while (true)
                 {
@@ -147,145 +54,146 @@ namespace LitEngine
                         tempport++;
                     }
                 }
-
+                mStartThread = true;
                 CreatSendAndRecThread();
-
+                mState = TcpState.Connected;
+                AddMainThreadMsgReCall(GetMsgReCallData(MSG_RECALL.Connected, mNetTag + "建立连接完成."));
             }
-
-            protected void CreatSend()
+            catch (Exception ex)
             {
-                mSendThread = new Thread(SendMessageThread);
-                mSendThread.Start();
+                DLog.LogError(ex);
+                mState = TcpState.Closed;
+                AddMainThreadMsgReCall(GetMsgReCallData(MSG_RECALL.ConectError, mNetTag + "建立连接失败. " + ex.Message));
             }
 
-            protected void CreatRec()
+        }
+
+        protected void CreatRec()
+        {
+            mRecThread = new Thread(ReceiveMessage);
+            mRecThread.IsBackground = true;
+            mRecThread.Start();
+        }
+
+        virtual protected void CreatSendAndRecThread()
+        {
+            CreatRec();
+            DLog.Log(mNetTag + "建立连接完成");
+        }
+
+        #endregion
+
+
+        #region 属性设置方法
+        virtual public void ChangetTargetPoint(IPEndPoint _tar)
+        {
+            mTargetPoint = _tar;
+        }
+        #endregion
+
+        #region 收发
+        #region 发送  
+        override public void AddSend(SendData _data)
+        {
+            if (_data == null)
             {
-                mRecThread = new Thread(ReceiveMessage);
-                mRecThread.Start();
+                DLog.LogError("试图添加一个空对象到发送队列!AddSend");
+                return;
             }
-
-            virtual protected void CreatSendAndRecThread()
+            try
             {
-                CreatSend();
-                CreatRec();
-               DLog.Log( mNetTag + "建立连接完成");
+                var ar = mSocket.BeginSendTo(_data.Data, 0, _data.SendLen, SocketFlags.None, mTargetPoint, sendCallBack, _data);
             }
-
-            #endregion
-
-
-            #region 属性设置方法
-            virtual public void ChangetTargetPoint(IPEndPoint _tar)
+            catch (System.Exception erro)
             {
-                mTargetPoint = _tar;
+                DLog.LogFormat("UDP Send Error.{0}" , erro);
             }
-            #endregion
+            
+        }
 
-            #region 收发
-            #region 发送  
-            override public void AddSend(SendData _data)
+        #region thread send
+        void SendAsyncCallback(IAsyncResult result)
+        {
+            mSocket.EndSendTo(result);
+            SendData tadata = result.AsyncState as SendData;
+            if(result.IsCompleted)
             {
-                if(_data == null)
-                {
-                    DLog.LogError( "试图添加一个空对象到发送队列!AddSend");
-                    return;
-                }
-                if (!mStartThread) return;
-                mSendDataList.Enqueue(_data);
             }
-
-            #region thread send
-            virtual protected void SendMessageThread()
+            if (tadata != null)
             {
-                while (mStartThread)
-                {
-                    try
-                    {
-                        if (mSendDataList.Count == 0)
-                            continue;                      
-                        SendThread((SendData)mSendDataList.Dequeue());
-                    }
-                    catch (Exception e)
-                    {
-                        DLog.LogError(mNetTag + e.ToString());
-                    }
-                }
+                DebugMsg(tadata.Cmd, tadata.Data, 0,  tadata.SendLen, "UdpSend",result.IsCompleted);
             }
+        }
 
-            virtual protected void SendThread(SendData _data)
-            {
-                if (_data == null) return;
-                int tsend = mSocket.SendTo(_data.Data, _data.SendLen, SocketFlags.None, mTargetPoint);
-                DebugMsg(_data.Cmd, _data.Data, 0, _data.SendLen, "UdpSend");
-
-            }
-            #endregion
-            #endregion
+        #endregion
+        #endregion
 
 
-            #region　接收
+        #region　接收
 
-            #region thread rec
-            virtual protected void ReceiveMessage()
-            {
-                while (mStartThread)
-                {
-                    try
-                    {
-                        if (mSocket.Available != 0)
-                        {
-                            int receiveNumber = mSocket.ReceiveFrom(mRecbuffer, SocketFlags.None, ref mRecPoint);
-                            IPEndPoint tremot = (IPEndPoint)mRecPoint;
-                            if (receiveNumber > 0 && tremot.Address.Equals(mServerIP))
-                                Processingdata(receiveNumber, mRecbuffer);
-                        }
-                           
-                    }
-                    catch (Exception e)
-                    {
-                        DLog.LogError( "UDP接收线程异常:" + e + "|" + "|" + mServerIP);
-                    }
-                    Thread.Sleep(1);
-                }
-
-            }
-            #endregion
-
-            override protected void Processingdata(int _len, byte[] _buffer)
+        #region thread rec
+        virtual protected void ReceiveMessage()
+        {
+            while (mStartThread)
             {
                 try
                 {
-                    DebugMsg(-1, _buffer, 0, _len, "接收-bytes");
-                    if (!IsPushPackage)
+                    if (mSocket.Available != 0)
                     {
-                        ReceiveData tssdata = new ReceiveData(_buffer, 0);
-                        mResultDataList.Enqueue(tssdata);
+                        int receiveNumber = mSocket.ReceiveFrom(mRecbuffer, SocketFlags.None, ref mRecPoint);
+                        IPEndPoint tremot = (IPEndPoint)mRecPoint;
+
+                        if (receiveNumber > 0 && tremot.Address.Equals(mServerIP))
+                            Processingdata(receiveNumber, mRecbuffer);
                     }
-                    else
-                    {
-                        mBufferData.Push(_buffer, _len);
-                        while (mBufferData.IsFullData())
-                        {
-                            ReceiveData tssdata = mBufferData.GetReceiveData();
-                            mResultDataList.Enqueue(tssdata);
-                            DebugMsg(tssdata.Cmd, tssdata.Data, 0, tssdata.Len, "接收-ReceiveData");
-                        }
-                    }
+
                 }
                 catch (Exception e)
                 {
-                    DLog.LogError(mNetTag + "-" + e.ToString());
+                    DLog.LogError("UDP接收线程异常:" + e + "|" + "|" + mServerIP);
                 }
-
+                Thread.Sleep(1);
             }
-            #endregion
 
-            protected void Update()
-            {
-                UpdateReCalledMsg();
-                UpdateRecMsg();
-            }
-            #endregion
         }
+        #endregion
+
+        override protected void Processingdata(int _len, byte[] _buffer)
+        {
+            try
+            {
+                DebugMsg(-1, _buffer, 0, _len, "接收-bytes");
+                if (!IsPushPackage)
+                {
+                    ReceiveData tssdata = new ReceiveData(_buffer, 0);
+                    mResultDataList.Enqueue(tssdata);
+                    DebugMsg(tssdata.Cmd, tssdata.Data, 0, tssdata.Len, "接收-ReceiveData");
+                }
+                else
+                {
+                    mBufferData.Push(_buffer, _len);
+                    while (mBufferData.IsFullData())
+                    {
+                        ReceiveData tssdata = mBufferData.GetReceiveData();
+                        mResultDataList.Enqueue(tssdata);
+                        DebugMsg(tssdata.Cmd, tssdata.Data, 0, tssdata.Len, "接收-ReceiveData");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                DLog.LogError(mNetTag + "-" + e.ToString());
+            }
+
+        }
+        #endregion
+
+        override protected void MainThreadUpdate()
+        {
+            UpdateReCalledMsg();
+            UpdateRecMsg();
+        }
+
+        #endregion
     }
 }

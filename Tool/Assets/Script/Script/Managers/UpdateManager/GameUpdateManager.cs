@@ -1,8 +1,8 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
+using LitEngine.UpdateSpace;
 namespace LitEngine
 {
-    using UpdateSpace;
     public class GameUpdateManager : MonoManagerBase
     {
         private static object lockobj = new object();
@@ -47,6 +47,10 @@ namespace LitEngine
 
         }
         #region 注册
+        static internal void InsertUpdate(int pIndex,UpdateBase pSor)
+        {
+            Instance.UpdateList.Insert(pIndex,pSor);
+        }
         static public void RegUpdate(UpdateBase _act)
         {
             Instance.UpdateList.Add(_act);
