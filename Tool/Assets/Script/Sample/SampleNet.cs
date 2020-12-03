@@ -9,10 +9,30 @@ public class SampleNet : MonoBehaviour
     private void Awake()
     {
         //TestTCP();
-        TestUDP();
-        //TestKCP();
+        //TestUDP();
+        TestKCP();
         tetstdata.AddInt(2);
         Application.runInBackground = true;
+    }
+
+    void OutputEvent(byte[] pBuffer,int pSize)
+    {
+        ShowBuffer(pBuffer,pSize);
+    }
+
+    void ShowBuffer(byte[] pBuffer ,int pSize)
+    {
+        System.Text.StringBuilder bufferstr = new System.Text.StringBuilder();
+        bufferstr.Append("{");
+        for (int i = 0; i < pSize; i++)
+        {
+            if (i != 0)
+                bufferstr.Append(",");
+            bufferstr.Append(pBuffer[i]);
+        }
+        bufferstr.Append("}");
+        string tmsg = string.Format("{0}", bufferstr);
+        Debug.Log(tmsg);
     }
 
     // Update is called once per frame
@@ -20,12 +40,14 @@ public class SampleNet : MonoBehaviour
     {
         UDPNet.Init("127.0.0.1", 20236);
         UDPNet.ShowMsgLog(true);
+        UDPNet.SetOutputDelgate(OutputEvent);
         UDPNet.Connect();
     }
     void TestTCP()
     {
         TCPNet.Init("127.0.0.1", 20240);
         TCPNet.ShowMsgLog(true);
+        TCPNet.SetOutputDelgate(OutputEvent);
         TCPNet.Connect();
     }
     void TestKCP()
@@ -33,7 +55,7 @@ public class SampleNet : MonoBehaviour
         KCPNet.Init("127.0.0.1", 20250);
         KCPNet.ShowMsgLog(true);
         KCPNet.Connect();
-        KCPNet.Reg(11,TestRec);
+        KCPNet.SetOutputDelgate(OutputEvent);
     }
 
     void TestRec(object pData)
@@ -44,8 +66,8 @@ public class SampleNet : MonoBehaviour
     void Update()
     {
         //UpdateTCP();
-        UpdateUDP();
-        //UpdateKCP();
+        //UpdateUDP();
+        UpdateKCP();
     }
 
     void UpdateKCP()
