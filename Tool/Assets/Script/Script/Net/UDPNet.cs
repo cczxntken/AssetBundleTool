@@ -10,7 +10,6 @@ namespace LitEngine.Net
     public class UDPNet : NetBase<UDPNet>
     {
         #region socket属性
-        static public bool IsPushPackage = false;
         protected IPEndPoint mTargetPoint;//目标地址
         protected EndPoint mRecPoint;
         protected IPAddress mServerIP;
@@ -37,7 +36,7 @@ namespace LitEngine.Net
                 mSocket = new Socket(mServerIP.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
                 mTargetPoint = new IPEndPoint(mServerIP, mPort);
                 mRecPoint = new IPEndPoint(mServerIP, mPort);
-                
+
                 int tempport = mLocalPort;
                 while (true)
                 {
@@ -106,9 +105,9 @@ namespace LitEngine.Net
             }
             catch (System.Exception erro)
             {
-                DLog.LogFormat("UDP Send Error.{0}" , erro);
+                DLog.LogFormat("UDP Send Error.{0}", erro);
             }
-            
+
         }
 
         #region thread send
@@ -116,12 +115,12 @@ namespace LitEngine.Net
         {
             mSocket.EndSendTo(result);
             SendData tadata = result.AsyncState as SendData;
-            if(result.IsCompleted)
+            if (result.IsCompleted)
             {
             }
             if (tadata != null)
             {
-                DebugMsg(tadata.Cmd, tadata.Data, 0,  tadata.SendLen, "UdpSend",result.IsCompleted);
+                DebugMsg(tadata.Cmd, tadata.Data, 0, tadata.SendLen, "UdpSend", result.IsCompleted);
             }
         }
 
@@ -163,22 +162,9 @@ namespace LitEngine.Net
             try
             {
                 DebugMsg(-1, _buffer, 0, _len, "接收-bytes");
-                if (!IsPushPackage)
-                {
-                    ReceiveData tssdata = new ReceiveData(_buffer, 0);
-                    mResultDataList.Enqueue(tssdata);
-                    DebugMsg(tssdata.Cmd, tssdata.Data, 0, tssdata.Len, "接收-ReceiveData");
-                }
-                else
-                {
-                    mBufferData.Push(_buffer, _len);
-                    while (mBufferData.IsFullData())
-                    {
-                        ReceiveData tssdata = mBufferData.GetReceiveData();
-                        mResultDataList.Enqueue(tssdata);
-                        DebugMsg(tssdata.Cmd, tssdata.Data, 0, tssdata.Len, "接收-ReceiveData");
-                    }
-                }
+                ReceiveData tssdata = new ReceiveData(_buffer, 0);
+                mResultDataList.Enqueue(tssdata);
+                DebugMsg(tssdata.Cmd, tssdata.Data, 0, tssdata.Len, "接收-ReceiveData");
             }
             catch (Exception e)
             {

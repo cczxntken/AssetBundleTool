@@ -11,7 +11,6 @@ namespace LitEngine.Net
     public class KCPNet : NetBase<KCPNet>
     {
         #region socket属性
-        static public bool IsPushPackage = false;
         protected IPEndPoint mTargetPoint;//目标地址
         protected EndPoint mRecPoint;
         protected IPAddress mServerIP;
@@ -24,7 +23,7 @@ namespace LitEngine.Net
         private KCPNet() : base()
         {
             mNetTag = "KCP";
-            kcpObject = new KCP(1,HandleKcpSend);
+            kcpObject = new KCP(1, HandleKcpSend);
             kcpObject.NoDelay(1, 10, 2, 1);
             kcpObject.WndSize(128, 128);
         }
@@ -50,7 +49,7 @@ namespace LitEngine.Net
                 mSocket = new Socket(mServerIP.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
                 mTargetPoint = new IPEndPoint(mServerIP, mPort);
                 mRecPoint = new IPEndPoint(mServerIP, mPort);
-                
+
                 int tempport = mLocalPort;
                 while (true)
                 {
@@ -113,13 +112,13 @@ namespace LitEngine.Net
         #region 发送  
         override public void AddSend(SendData _data)
         {
-            if(mSocket == null) return;
+            if (mSocket == null) return;
             if (_data == null)
             {
                 DLog.LogError("试图添加一个空对象到发送队列!AddSend");
                 return;
             }
-            AddSend(_data.Data,_data.SendLen);
+            AddSend(_data.Data, _data.SendLen);
         }
 
         public bool AddSend(byte[] buff, int size)
@@ -129,15 +128,15 @@ namespace LitEngine.Net
 
         private void HandleKcpSend(byte[] buff, int size)
         {
-            if(mSocket == null) return;
+            if (mSocket == null) return;
             try
             {
-                var ar = mSocket.BeginSendTo(buff, 0, size, SocketFlags.None, mTargetPoint, sendCallBack,buff);
+                var ar = mSocket.BeginSendTo(buff, 0, size, SocketFlags.None, mTargetPoint, sendCallBack, buff);
             }
             catch (System.Exception erro)
             {
-                DLog.LogFormat("KCP Send Error.{0}" , erro);
-            } 
+                DLog.LogFormat("KCP Send Error.{0}", erro);
+            }
         }
 
         #region thread send
@@ -145,12 +144,12 @@ namespace LitEngine.Net
         {
             mSocket.EndSendTo(result);
             byte[] tbuff = result.AsyncState as byte[];
-            if(result.IsCompleted)
+            if (result.IsCompleted)
             {
             }
             if (tbuff != null)
             {
-                DebugMsg(-1, tbuff, 0,tbuff.Length, "KCPSend",result.IsCompleted);
+                DebugMsg(-1, tbuff, 0, tbuff.Length, "KCPSend", result.IsCompleted);
             }
         }
 
@@ -205,21 +204,15 @@ namespace LitEngine.Net
         protected void PushRecData(byte[] pRecbuf, int pSize)
         {
             DebugMsg(-1, pRecbuf, 0, pSize, "接收-bytes");
-            if (!IsPushPackage)
+            try
             {
                 ReceiveData tssdata = new ReceiveData(pRecbuf, 0);
                 Call(tssdata.Cmd, tssdata);
                 DebugMsg(tssdata.Cmd, tssdata.Data, 0, tssdata.Len, "接收-ReceiveData");
             }
-            else
+            catch (System.Exception error)
             {
-                mBufferData.Push(pRecbuf, pSize);
-                while (mBufferData.IsFullData())
-                {
-                    ReceiveData tssdata = mBufferData.GetReceiveData();
-                    Call(tssdata.Cmd, tssdata);
-                    DebugMsg(tssdata.Cmd, tssdata.Data, 0, tssdata.Len, "接收-ReceiveData");
-                }
+                DLog.LogError(error);
             }
         }
         #endregion
@@ -236,7 +229,7 @@ namespace LitEngine.Net
                 if (ret < 0)
                 {
                     string str = System.Text.Encoding.UTF8.GetString(recvBufferRaw, 0, recvBufferRaw.Length);
-                    DLog.LogFormat("收到了错误的kcp包: {0}",str);
+                    DLog.LogFormat("收到了错误的kcp包: {0}", str);
                     return;
                 }
 
@@ -248,12 +241,12 @@ namespace LitEngine.Net
                     int treclen = kcpObject.Recv(recvBuffer);
                     if (treclen > 0)
                     {
-                        PushRecData(recvBuffer,treclen);
+                        PushRecData(recvBuffer, treclen);
                     }
                 }
             }
         }
-        
+
         private static readonly DateTime UTCTimeBegin = new DateTime(1970, 1, 1);
         public static UInt32 GetClockMS()
         {
@@ -266,7 +259,7 @@ namespace LitEngine.Net
         override protected void MainThreadUpdate()
         {
             UpdateReCalledMsg();
-            if(mState != TcpState.Connected) return;
+            if (mState != TcpState.Connected) return;
 
             uint currentTimeMS = GetClockMS();
             HandleRecvQueue();
