@@ -55,7 +55,7 @@ public class SampleNet : MonoBehaviour
         KCPNet.Init("127.0.0.1", 20250);
         KCPNet.ShowMsgLog(true);
         KCPNet.Connect();
-        KCPNet.SetOutputDelgate(OutputEvent);
+        //KCPNet.SetOutputDelgate(OutputEvent);
     }
 
     void TestRec(object pData)
