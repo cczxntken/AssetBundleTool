@@ -8,8 +8,9 @@ public class SampleNet : MonoBehaviour
     SendData tetstdata = new SendData(10);
     private void Awake()
     {
-
-        TestKCP();
+        //TestTCP();
+        TestUDP();
+        //TestKCP();
         tetstdata.AddInt(2);
         Application.runInBackground = true;
     }
@@ -38,27 +39,28 @@ public class SampleNet : MonoBehaviour
     void TestRec(object pData)
     {
         ReceiveData tdata = pData as ReceiveData;
-        DLog.Log("TestRec " + tdata.Cmd);
+        //DLog.Log("TestRec " + tdata.Cmd);
     }
     void Update()
     {
-
-        UpdateKCP();
+        //UpdateTCP();
+        UpdateUDP();
+        //UpdateKCP();
     }
 
     void UpdateKCP()
     {
-        KCPNet.Add(tetstdata);
+        KCPNet.SendObject(tetstdata);
     }
     void UpdateUDP()
     {
-        UDPNet.Add(tetstdata);
+        UDPNet.SendObject(tetstdata);
     }
     void UpdateTCP()
     {
         if (TCPNet.IsConnect())
         {
-            TCPNet.Add(tetstdata);
+            TCPNet.SendObject(tetstdata);
         }
     }
 }

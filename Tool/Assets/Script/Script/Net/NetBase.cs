@@ -92,6 +92,12 @@ namespace LitEngine.Net
         protected SafeQueue<MSG_RECALL_DATA> mToMainThreadMsgList = new SafeQueue<MSG_RECALL_DATA>();//给主线程发送通知
         protected UpdateObject updateObject;
         #endregion
+
+        #region 输出到外部
+        public delegate void OutputEvent(byte[] pBuffer,int pSize);
+        protected OutputEvent receiveOutput = null;
+        #endregion
+
         #region 日志
         protected bool IsShowDebugLog = false;
         #endregion
@@ -166,14 +172,24 @@ namespace LitEngine.Net
             Instance.SetTimerOutAndBuffSize(_rec, _send, _recsize, _sendsize, pNoDelay);
         }
 
+        static public void SetOutputDelgate(OutputEvent pEvent)
+        {
+            Instance.receiveOutput = pEvent;
+        }
+
         static public void ShowMsgLog(bool pShow)
         {
             Instance.IsShowDebugLog = pShow;
         }
 
-        static public void Add(SendData _data)
+        static public bool SendObject(SendData pData)
         {
-            Instance.AddSend(_data);
+            return Instance.Send(pData);
+        }
+
+        static public bool SendBytes(byte[] pBuffer,int pSize)
+        {
+            return Instance.Send(pBuffer, pSize);
         }
         static public void Reg(int msgid, System.Action<object> func)
         {
@@ -465,7 +481,7 @@ namespace LitEngine.Net
         virtual public void UpdateRecMsg()
         {
             if (StopUpdateRecMsg) return;
-
+            if (receiveOutput != null) return;
             int i = mResultDataList.Count > OneFixedUpdateChoseCount ? OneFixedUpdateChoseCount : mResultDataList.Count;
 
             while (i > 0)
@@ -489,7 +505,30 @@ namespace LitEngine.Net
         #region 处理接收到的数据
         virtual protected void Processingdata(int _len, byte[] _buffer)
         {
-            DebugMsg(0, _buffer, 0, _len, "接收");
+            DebugMsg(-1, _buffer, 0, _len, "接收-bytes");
+            if (receiveOutput == null)
+            {
+                PushRecData(_buffer, _len);
+            }
+            else
+            {
+                OutputToDelgate(_buffer, _len);
+            }
+        }
+        virtual protected void PushRecData(byte[] pBuffer,int pSize)
+        {
+
+        }
+        virtual protected void OutputToDelgate(byte[] pBuffer, int pSize)
+        {
+            try
+            {
+                receiveOutput(pBuffer, pSize);
+            }
+            catch (Exception ex)
+            {
+                DLog.LogError(ex);
+            }  
         }
         #endregion
 
@@ -519,9 +558,13 @@ namespace LitEngine.Net
             }
         }
         #region 发送
-        virtual public void AddSend(SendData _data)
+        virtual public bool Send(SendData _data)
         {
-
+            return false;
+        }
+        virtual public bool Send(byte[] pBuffer,int pSize)
+        {
+            return false;
         }
         #endregion
 

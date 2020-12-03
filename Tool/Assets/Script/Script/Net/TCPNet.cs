@@ -6,9 +6,9 @@ using System.Threading;
 using System.Net;
 namespace LitEngine.Net
 {
-    public class TCPNet : NetBase<TCPNet>
+    public sealed class TCPNet : NetBase<TCPNet>
     {
-        protected AsyncCallback sendCallBack;
+        private AsyncCallback sendCallBack;
         #region 构造析构
         private TCPNet() : base()
         {
@@ -39,7 +39,7 @@ namespace LitEngine.Net
             System.Threading.Tasks.Task.Run(ThreatConnect);
         }
 
-        virtual protected bool TCPConnect()
+        private bool TCPConnect()
         {
             bool ret = false;
             List<IPAddress> tipds = GetServerIpAddress(mHostName);
@@ -66,7 +66,7 @@ namespace LitEngine.Net
             return ret;
         }
 
-        protected void ThreatConnect()
+        private void ThreatConnect()
         {
 
             bool tok = TCPConnect();
@@ -105,7 +105,7 @@ namespace LitEngine.Net
 
         }
 
-        protected void CreatRec()
+        private void CreatRec()
         {
             mRecThread = new Thread(ReceiveMessage);
             mRecThread.IsBackground = true;
@@ -116,36 +116,44 @@ namespace LitEngine.Net
 
         #region 发送
 
-        override public void AddSend(SendData _data)
+        override public bool Send(SendData _data)
         {
             if (_data == null)
             {
                 DLog.LogError("试图添加一个空对象到发送队列!AddSend");
-                return;
+                return false;
             }
+            DebugMsg(_data.Cmd, _data.Data, 0, _data.SendLen, "TCPSend");
+            return Send(_data.Data, _data.SendLen);
+        }
 
+        override public bool Send(byte[] pBuffer, int pSize)
+        {
+            if (mSocket == null) return false;
             try
             {
                 SocketError errorCode = SocketError.Success;
-                var ar = mSocket.BeginSend(_data.Data, 0, _data.SendLen, SocketFlags.None, out errorCode, sendCallBack, _data);
+                var ar = mSocket.BeginSend(pBuffer, 0, pSize, SocketFlags.None, out errorCode, sendCallBack, pBuffer);
                 if (errorCode != SocketError.Success)
                 {
                     DLog.LogErrorFormat("TCP Send Error.{0}", errorCode);
                 }
+                return errorCode == SocketError.Success;
             }
             catch (System.Exception erro)
             {
                 DLog.LogFormat("TCP Send Error.{0}", erro);
             }
+            return false;
         }
 
         void SendAsyncCallback(IAsyncResult result)
         {
             int tsendLen = mSocket.EndSend(result);
-            SendData tadata = result.AsyncState as SendData;
+            byte[] tadata = result.AsyncState as byte[];
             if (tadata != null)
             {
-                DebugMsg(tadata.Cmd, tadata.Data, 0, tsendLen, "TCPSend", result.IsCompleted);
+                DebugMsg(-1, tadata, 0, tsendLen, "TCPSend", result.IsCompleted);
             }
             if (result.IsCompleted == false)
             {
@@ -157,7 +165,7 @@ namespace LitEngine.Net
 
         #region　接收
 
-        protected void ReceiveMessage()
+        private void ReceiveMessage()
         {
             DLog.Log("TCP Start ReceiveMessage");
             try
@@ -190,8 +198,12 @@ namespace LitEngine.Net
 
         override protected void Processingdata(int _len, byte[] _buffer)
         {
-            DebugMsg(-1, _buffer, 0, _len, "接收-bytes");
-            mBufferData.Push(_buffer, _len);
+            base.Processingdata(_len, _buffer);
+        }
+
+        override protected void PushRecData(byte[] pBuffer, int pSize)
+        {
+            mBufferData.Push(pBuffer, pSize);
             while (mBufferData.IsFullData())
             {
                 ReceiveData tssdata = mBufferData.GetReceiveData();
