@@ -8,24 +8,57 @@ public class SampleNet : MonoBehaviour
     SendData tetstdata = new SendData(10);
     private void Awake()
     {
-        UDPNet.Init("127.0.0.1", 20236);
-        UDPNet.ShowMsgLog(true);
-        UDPNet.Connect();
-        // TCPNet.Init("127.0.0.1", 20240);
-        // TCPNet.ShowMsgLog(true);
-        // TCPNet.Connect();
+
+        TestKCP();
         tetstdata.AddInt(2);
         Application.runInBackground = true;
     }
 
     // Update is called once per frame
+    void TestUDP()
+    {
+        UDPNet.Init("127.0.0.1", 20236);
+        UDPNet.ShowMsgLog(true);
+        UDPNet.Connect();
+    }
+    void TestTCP()
+    {
+        TCPNet.Init("127.0.0.1", 20240);
+        TCPNet.ShowMsgLog(true);
+        TCPNet.Connect();
+    }
+    void TestKCP()
+    {
+        KCPNet.Init("127.0.0.1", 20250);
+        KCPNet.ShowMsgLog(true);
+        KCPNet.Connect();
+        KCPNet.Reg(11,TestRec);
+    }
 
+    void TestRec(object pData)
+    {
+        ReceiveData tdata = pData as ReceiveData;
+        DLog.Log("TestRec " + tdata.Cmd);
+    }
     void Update()
     {
-        // if(TCPNet.IsConnect())
-        // {
-        //     TCPNet.Add(tetstdata);
-        // }
+
+        UpdateKCP();
+    }
+
+    void UpdateKCP()
+    {
+        KCPNet.Add(tetstdata);
+    }
+    void UpdateUDP()
+    {
         UDPNet.Add(tetstdata);
+    }
+    void UpdateTCP()
+    {
+        if (TCPNet.IsConnect())
+        {
+            TCPNet.Add(tetstdata);
+        }
     }
 }
