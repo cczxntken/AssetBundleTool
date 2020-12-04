@@ -3599,3 +3599,9 @@ Tool/NewAssembly.csproj
 Tool/LitEngine.csproj
 Tool/obj
 Tool/obj/Debug/LitEngine.csprojAssemblyReference.cache
+testServer/Library
+testServer/Temp
+testServer/Packages
+testServer/obj
+testServer/Logs
+testServer/Assembly-CSharp.csproj
