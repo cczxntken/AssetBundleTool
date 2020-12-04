@@ -8,9 +8,9 @@ public class SampleNet : MonoBehaviour
     SendData tetstdata = new SendData(10);
     private void Awake()
     {
-        TestTCP();
+        //TestTCP();
         //TestUDP();
-        //TestKCP();
+        TestKCP();
         tetstdata.AddInt(2);
         Application.runInBackground = true;
     }
@@ -65,9 +65,9 @@ public class SampleNet : MonoBehaviour
     }
     void Update()
     {
-        UpdateTCP();
+        //UpdateTCP();
         //UpdateUDP();
-        //UpdateKCP();
+        UpdateKCP();
     }
 
     void UpdateKCP()
