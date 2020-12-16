@@ -53,7 +53,7 @@ public class SampleNet : MonoBehaviour
     void TestKCP()
     {
         KCPNet.Init("127.0.0.1", 20250);
-        KCPNet.ShowMsgLog(true);
+       // KCPNet.ShowMsgLog(true);
         KCPNet.Connect();
         //KCPNet.SetOutputDelgate(OutputEvent);
     }
