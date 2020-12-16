@@ -272,8 +272,8 @@ namespace LitEngine.Net
             List<IPAddress> ret = new List<IPAddress>();
             try
             {
-                IPAddress[] tips = Dns.GetHostEntry(mHostName).AddressList;
-                DLog.Log("HostName: " + mHostName + " Length:" + tips.Length);
+                IPAddress[] tips = Dns.GetHostEntry(_hostname).AddressList;
+                DLog.Log("HostName: " + _hostname + " Length:" + tips.Length);
                 for (int i = 0; i < tips.Length; i++)
                 {
                     // DLog.Log( "IpAddress: " + tips[i].ToString() + " AddressFamily:" + tips[i].AddressFamily.ToString());
@@ -286,7 +286,7 @@ namespace LitEngine.Net
             }
             catch (Exception e)
             {
-                DLog.LogError(string.Format("[获取IPAddress失败]" + " HostName:{0} IP:{1} ErrorMessage:{2}", mHostName, ret.Count, e.ToString()));
+                DLog.LogError(string.Format("[获取IPAddress失败]" + " HostName:{0} IP:{1} ErrorMessage:{2}", _hostname, ret.Count, e.ToString()));
             }
             return ret;
         }
