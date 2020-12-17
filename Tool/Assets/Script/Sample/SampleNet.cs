@@ -4,14 +4,32 @@ using UnityEngine;
 using LitEngine.Net;
 public class SampleNet : MonoBehaviour
 {
+    public enum TestType
+    {
+        tcp = 0,
+        udp,
+        kcp,
+    }
     // Start is called before the first frame update
     SendData tetstdata = new SendData(10);
+
+    public TestType state = TestType.tcp;
+    public bool isShowDebug = true;
     private void Awake()
     {
-        //TestTCP();
-        //TestUDP();
-        TestKCP();
-        tetstdata.AddInt(2);
+        switch (state)
+        {
+            case TestType.tcp:
+                TestTCP();
+                break;
+            case TestType.udp:
+                TestUDP();
+                break;
+            case TestType.kcp:
+                TestKCP();
+                break;
+        }
+
         Application.runInBackground = true;
     }
 
@@ -39,21 +57,21 @@ public class SampleNet : MonoBehaviour
     void TestUDP()
     {
         UDPNet.Init("127.0.0.1", 20236);
-        UDPNet.ShowMsgLog(true);
-        UDPNet.SetOutputDelgate(OutputEvent);
+        UDPNet.ShowMsgLog(isShowDebug);
+        //UDPNet.SetOutputDelgate(OutputEvent);
         UDPNet.Connect();
     }
     void TestTCP()
     {
         TCPNet.Init("127.0.0.1", 20240);
-        TCPNet.ShowMsgLog(true);
+        TCPNet.ShowMsgLog(isShowDebug);
         //TCPNet.SetOutputDelgate(OutputEvent);
         TCPNet.Connect();
     }
     void TestKCP()
     {
         KCPNet.Init("127.0.0.1", 20250);
-       // KCPNet.ShowMsgLog(true);
+        KCPNet.ShowMsgLog(isShowDebug);
         KCPNet.Connect();
         //KCPNet.SetOutputDelgate(OutputEvent);
     }
@@ -65,9 +83,18 @@ public class SampleNet : MonoBehaviour
     }
     void Update()
     {
-        //UpdateTCP();
-        //UpdateUDP();
-        UpdateKCP();
+        switch (state)
+        {
+            case TestType.tcp:
+                UpdateTCP();
+                break;
+            case TestType.udp:
+                UpdateUDP();
+                break;
+            case TestType.kcp:
+                UpdateKCP();
+                break;
+        }
     }
 
     void UpdateKCP()
