@@ -31,14 +31,15 @@ namespace LitEngine.Net
         {
             mIndex = 0;
             int tindex = _offset;
-            RecLen = BufferBase.SReadInt(_buffer, tindex);
+            RecLen = BufferBase.headInfo.ReadHeadLen(_buffer, tindex);
 
             if (RecLen > BufferBase.maxLen || RecLen < 0) throw new System.ArgumentOutOfRangeException("数据长度超出了限制 len = " + RecLen);
 
-            Len = RecLen - SocketDataBase.mPackageTopLen;
-            tindex += sizeof(int);
-            Cmd = BufferBase.SReadInt(_buffer, tindex);
-            tindex += sizeof(int);
+            Len = RecLen - BufferBase.headInfo.packageHeadLen;
+            Cmd = BufferBase.headInfo.ReadCmd(_buffer, tindex);
+
+            tindex += BufferBase.headInfo.packageHeadLen;
+
             if (Data == null || Len > Data.Length)
                 Data = new byte[Len];
             else
@@ -46,6 +47,22 @@ namespace LitEngine.Net
 
             mIndex = 0;
             Array.Copy(_buffer, tindex, Data, 0, Len);
+        }
+
+        override public string ToString()
+        {
+            System.Text.StringBuilder bufferstr = new System.Text.StringBuilder();
+            bufferstr.AppendFormat("length = {0},bytes = ", Len);
+            bufferstr.Append("{");
+            for (int i = 0; i < Len; i++)
+            {
+                if (i != 0)
+                    bufferstr.Append(",");
+                bufferstr.Append(Data[i]);
+            }
+            bufferstr.Append("}");
+
+            return bufferstr.ToString();
         }
 
         #region 读取
